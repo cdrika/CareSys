@@ -1,0 +1,385 @@
+CareSys Agent
+Technical design for CodeIgniter and MySQL
+Version 1.0 | 23 October 2026 | Audience: Codex, application developers, testers and operators
+1 Document purpose and baseline
+This document defines how to implement CareSys Agent as an online application using CodeIgniter 4 and MySQL. It translates the Business Requirements version 1.1 and Functional Specification version 2.0 into application boundaries, database constraints, authorization rules, transaction algorithms, HTTP contracts, infrastructure and verification work.
+The business document defines the intended outcomes. The functional document defines user behaviour and acceptance conditions. This technical document defines the proposed implementation. If a technical choice would change the agreed business behaviour, resolve the difference explicitly rather than changing the business rules through code.
+All examples are design examples, not an installed or tested application. SQL fragments illustrate selected integrity constraints; they are not the complete production schema. Commands and configuration become executable only after the project and custom classes have been created. No application, external provider, hosted environment or database is deployed by this document.
+2 Architecture decisions
+Decision
+Design baseline
+Reason and consequence
+AD 01 Application
+CodeIgniter 4 modular monolith
+One deployable application with explicit domain services; avoid distributed transactions initially
+AD 02 Runtime
+Maintained PHP 8.4 patch release, subject to package verification
+Pin a compatible patched release; validate CodeIgniter and Shield requirements before installation
+AD 03 Database
+MySQL 8.4 LTS, InnoDB, utf8mb4
+Foreign keys and transactional workflows; test on actual MySQL rather than assuming substitute engines behave identically
+AD 04 Authentication
+CodeIgniter Shield session authentication
+Use supported credential handling; implement tenant and disclosure authorization in the application
+AD 05 Web interface
+Server rendered CodeIgniter views with progressive JavaScript
+Same origin session security and mobile responsive pages; no separate SPA required for the first release
+AD 06 Background work
+Durable MySQL outbox and job queue
+Small deployment footprint; bounded workers can later move to a separate queue adapter
+AD 07 Documents
+Private object storage or private filesystem behind authorized downloads
+Binary files are not public resources and are not stored in ordinary relational rows
+AD 08 Production
+Linux, Nginx, PHP FPM, private managed MySQL
+Proposed baseline; hosting vendor, region, scale and budget remain owner decisions
+AD 09 API
+Versioned JSON endpoints sharing domain services with web controllers
+One set of business and authorization rules across interfaces
+
+Official sources confirm CodeIgniter's environment requirements, Shield's authentication role and MySQL's locking and constraint facilities [R1 to R6]. These facilities support the design; they do not supply CareSys Agent's business policies automatically. Patch versions must be locked and reviewed at implementation time; do not use an unbounded latest tag in production.
+3 Components and trust boundaries
+Browser or authorized integration        |        vTLS reverse proxy / request limits        |        vCodeIgniter routing and authentication filters        |        vValidated command + actor and workspace context        |        vApplication service + domain policies        |        +----> Scoped repositories ----> MySQL InnoDB        |                                   |        |                                   +--> Outbox        +----> Authorized document service          |                                                   vPrivate storage <---- scanner / background workers                              |                              v                    Email and provider adapters
+Network, application, data and provider boundaries must remain distinct. MySQL is reachable only from authorized application, worker and maintenance identities. The reverse proxy is the only public ingress. Providers authenticate callbacks independently of browser sessions. Workers do not inherit a user's authority merely because a job references that user.
+Three data domains are central. Personal data belongs to an individual's account context. Agency private data belongs to an agency and its access policies. Career data is attributed to a person and source, then shared through a grant. There is no global current_agency_id field that reassigns ownership of a person's history when they change employers.
+4 Repository and CodeIgniter structure
+app/  Config/    Routes.php  Filters.php  Services.php  Database.php  Filters/    WorkspaceFilter.php  MembershipFilter.php    EntitlementFilter.php  StepUpFilter.php  Modules/    Identity/    Agencies/    Subscriptions/    Profiles/    Recruitment/    CareerHistory/    Employment/    Scheduling/    TimeLeave/    Care/    AssetsExpenses/    Finance/  Shared/    Auth/  Policies/  Persistence/  Documents/    Events/  Jobs/  Money/  Time/  Observability/  Commands/  Database/    Migrations/  Seeds/  Views/    layouts/  components/tests/  Unit/  Integration/  Feature/  Browser/docs/  decisions/  api/  runbooks/public/writable/
+Register module namespaces through the chosen PSR 4 autoload arrangement. Within each module use Controllers, Requests or validators, Services, Policies, DTOs and Repositories as needed. Avoid creating an empty abstraction layer for every small record; the essential boundary is that controllers and views must not own authorization or multirow workflow logic.
+Controllers parse requests and format responses. Request validators check shape and basic field constraints. Services orchestrate authorized use cases and transactions. Policies determine actor and record access. Repositories issue parameterized scoped queries. DTOs and response presenters explicitly select output fields. Views escape user supplied content. CLI commands adapt worker or maintenance inputs to the same application services.
+Model allowed fields are a secondary protection, not permission checks. Never pass the complete browser request into save or update. Use immutable request DTOs or a deliberate field map. Dependency injection through application services keeps policies, clock, providers and transaction boundaries replaceable in tests.
+5 Identity sessions and workspace context
+Keep Shield credential records under package supported migrations. Confirm the actual key types and table names in the installed package before creating foreign keys. CareSys persons reference the authenticated user through a unique nullable link; unclaimed imported worker placeholders must be claimed through a controlled process, not automatic email or birth date matching.
+ActorContext contains user ID, account state, authenticated session ID and age, verification state, step up timestamp, correlation ID and service identity if applicable. AgencyContext contains resolved agency ID, membership ID, membership version, branch scope and entitlement version. PersonalContext resolves the person from the authenticated user; a posted person ID never changes who owns a personal operation.
+Use secure, HTTP only, same site session cookies and central session storage. Regenerate the session after authentication and privilege changes. Require CSRF validation on browser session mutations. Native integration tokens, if later offered, have explicit scopes and expiry and do not reuse browser CSRF rules. Require MFA for privileged and financial access and recent step up verification for contract agreement, account recovery and sensitive identity changes. Select and test a supported MFA implementation instead of assuming Shield installation satisfies every step up requirement.
+Every agency request identifies its agency in the route. Bind browser mutation forms to that agency and a workspace nonce. If the selected context and the form context differ, return WORKSPACE_CHANGED and preserve safe input. Agency switching must not retarget an old form silently. Revocation increments a membership or session security version and invalidates authorization caches. Offboarding removes employment derived access while preserving any separately authorized administrative role.
+6 Authorization and tenant isolation
+Define explicit permissions such as recruitment.search, history.request, history.read_granted, offers.issue, contracts.sign_for_agency, employment.activate, time.approve, leave.approve, asset.assign and payroll.export. Role assignment is tenant membership scoped. Platform roles live in a separate namespace and never imply a recruiter or finance role in every agency.
+Each protected service evaluates authentication, active account, correct context, membership, permission, record or assignment scope, feature entitlement and state. History services additionally evaluate identity confirmation and the specific grant. Existing employee administration does not require public directory discoverability. Personal privacy choices do not require an employer subscription.
+Agency repositories require AgencyContext as an argument, including find, count, relationship load and export methods. No public repository method may return agency rows using a bare primary key. Job handlers reconstruct context and revalidate it; they cannot call an unscoped all method because execution is trusted.
+MySQL foreign keys do not enforce row level authorization. Tenant aware foreign keys prevent records referencing another tenant, while service and repository policies prevent unauthorized reads and changes. Both are required. Cache keys contain scope, agency or person ID, relevant authorization version and record version. Protected history payloads are not stored in shared proxy caches. Send no store cache headers on private profile, contract, health, payroll and history responses.
+Support access has a request, purpose, authorized approver, scope and expiry. Every use is audited. A platform operator cannot enter an arbitrary tenant context merely by choosing a company ID.
+7 Routing validation and API conventions
+Disable automatic routing and declare method specific routes and filters. CodeIgniter documents the risk of legacy automatic routes bypassing route assigned filters [R3]. Coarse filters reject ineligible sessions; service policies recheck individual records. Test the effective filter order in the installed framework version.
+// Illustrative route shape; register these custom aliases first.$routes->setAutoRoute(false);$routes->group('api/v1/agencies/(:segment)',    ['filter' => 'agency-access'],    static function ($routes) {        $routes->post(            'joining/(:segment)/activate',            'EmploymentController::activate/$1/$2'        );    });
+The agency-access alias is an application defined filter responsible for resolving the agency and authenticated membership. It is not a built in CodeIgniter feature. Explicitly test parent route capture forwarding and the controller signature. Register browser CSRF protection through the chosen global or route configuration; a sample route alone does not establish the complete security chain.
+Use /api/v1/me for personal records and /api/v1/agencies/{agencyRef} for tenant operations. Use opaque public references; they are not security tokens. Return UTC instants in ISO 8601 with Z, separate timezone identifiers, date only values as YYYY-MM-DD, monetary decimals as strings with ISO currency, and durations as integer seconds. Reject unknown writable security and state fields. Validate safe sort keys, pagination bounds, lengths and referential scope.
+Mutation requests that may duplicate a financial or employment action require an Idempotency-Key. Mutable records use expected_version or If-Match with an equivalent version contract. One key reused with another payload returns 409. Initial pagination defaults: 25 rows and maximum 100. Search and identity lookup have separate abuse budgets; tune the limits during pilot and monitoring.
+{  "error": {    "code": "JOINING_NOT_READY",    "message": "Employment cannot start until checks are complete.",    "fields": {"conditions": "One required check is pending."},    "correlation_id": "request-reference"  }}
+Use 401 for unauthenticated, 403 for a safe known denial, 404 for absent or cross scope objects, 409 for state and concurrency conflicts, 422 for invalid input and 429 for throttling. Never put a birth date, contract text, salary or private account existence in an error. Log normalized error codes and correlation references, not full requests.
+8 Physical database standards
+Use InnoDB with utf8mb4 and a deliberate supported collation. Internal application IDs are BIGINT UNSIGNED; public UUID references may be stored as BINARY(16) with consistent application conversion. Do not assume Shield IDs share that type. Status fields use bounded VARCHAR values validated through domain enums and appropriate CHECK constraints. New states require a tested migration and application transition update.
+All tenant owned tables contain agency_id. Create a unique parent index on agency_id and id where composite foreign keys require it. Referencing columns have identical types and appropriate indexes. Use ON DELETE RESTRICT for employment, financial and attributable history relationships. Cleanup and retention workflows explicitly remove eligible records; do not cascade delete an entire career through agency cancellation.
+Store event timestamps in DATETIME(6) using UTC and set database connections to UTC. Store IANA timezone where local business interpretation matters. DATE fields store exact dates; partial career dates have a precision attribute and normalized value with an explicit display rule. Do not present the normalized first day as a known employment start day. Use DECIMAL(19,4) for intermediate monetary amounts with defined currency rounding; use higher scale rates where contracts require it. No floating point wages or invoice totals.
+Mutable tables have version, created_at and updated_at. Event and version tables are append only through application operations. Audit tables cannot be updated by the runtime database identity. Separate runtime DML privileges from migration DDL privileges. Foreign key and CHECK enforcement are verified by tests on the chosen MySQL release [R4].
+9 Core identity and recruitment dictionary
+The functional specification contains the complete domain inventory. The following physical dictionary defines the most sensitive Release A keys and constraints; additional profile and operational tables follow these conventions. FK means foreign key and UQ means unique key. Tables also carry common timestamps and versions where mutable.
+Table
+Principal columns
+Integrity and access
+persons
+id, public_ref, user_id nullable, legal_name, preferred_name, identity_status
+UQ public_ref and linked user_id; personal access or deliberate projected sharing
+person_private_identity
+person_id, encrypted_birth_date, key_ref, ciphertext_format
+One row per person; identity service only; excluded from ordinary profile loading
+identity_match_tokens
+person_id, normalization_version, key_version, match_token
+Indexed token with key version; not unique by person name and date; restricted access
+agencies
+id, public_ref, legal_name, country, currency, timezone, verification_status
+Agency status independent of subscription; privileged verification changes audited
+branches
+id, agency_id, public_ref, name, active
+UQ agency_id and id; agency scoped
+agency_memberships
+id, agency_id, user_id, status, security_version
+UQ agency_id and user_id; authentication table FK uses actual package key type
+membership_roles
+agency_id, membership_id, role_id
+Tenant aware membership FK; roles scoped or approved system templates
+membership_branch_scopes
+agency_id, membership_id, branch_id
+Both membership and branch belong to the same agency
+candidate_profiles
+person_id, visibility, job_seeking_status, summary, published_version, availability_confirmed_at
+One per person; read approved projection only
+candidate_region_preferences
+person_id, region_id, priority, radius_value, radius_unit
+Multiple regions; positive radius where supplied; private address not needed for region listing
+vacancies
+id, agency_id, public_ref, role, region_id, state, closing_date
+Scoped recruiter actions and immutable event history
+applications
+id, agency_id, vacancy_id, person_id, stage, outcome
+Tenant aware vacancy FK; serialize duplicate active application creation
+career_entries
+id, person_id, source_agency_id nullable, current_version_id
+Source reference records attribution, not requesting employer ownership
+career_entry_versions
+id, entry_id, person_id, version_no, structured_facts, verification_state
+UQ entry_id and version_no; normalized core dates and role fields; restricted narrative separately stored
+career_disputes
+id, entry_version_id, person_id, state, reviewer_ref, outcome_ref
+Only the relevant person or authorized source and review staff can act
+
+Normalize searchable qualifications, experience dates and role categories; structured_facts is a bounded description of supporting attributes, not a license to hide permissions and dates in arbitrary JSON. Verification and dispute are separate dimensions. An entry may be employer confirmed and currently disputed.
+10 Grants contracts and employment dictionary
+Table
+Principal columns
+Integrity and access
+identity_requests
+id, agency_id, application_id, purpose_code, status, confirmation_ref, expires_at
+Minimize retained matching inputs; status responses do not enumerate hidden accounts
+history_requests
+id, agency_id, person_id, application_id, purpose, state, requested_expiry
+Only identity confirmed requests progress to restricted disclosure
+disclosure_grants
+id, agency_id, person_id, request_id, status, valid_from, valid_until, withdrawn_at, version
+UQ request_id; cannot approve oneself as a recruiter on behalf of the person
+grant_categories
+grant_id, category_code
+UQ grant_id and category_code; explicit allowlist
+grant_recipients
+grant_id, agency_id, membership_id
+Named active recipients; tenant aware membership FK
+grant_entry_versions
+grant_id, person_id, entry_version_id
+Person consistency checked by constraints where defined and by grant service
+disclosure_events
+id, grant_id, viewer_ref, agency_id, entry_version_id, action, occurred_at
+Append only; metadata without copying salary or narrative into logs
+offers
+id, agency_id, person_id, application_id, state, expires_at
+Agency scoped; multiple offers remain independent
+contract_versions
+id, agency_id, offer_id, version_no, document_id, sha256, terms_snapshot
+UQ offer_id and version_no; issued versions immutable
+contract_acceptances
+id, agency_id, contract_version_id, party_kind, actor_ref, accepted_at, evidence_ref
+UQ contract_version_id and party_kind for final party acceptance; agency signer capacity validated
+joining_requests
+id, agency_id, person_id, contract_version_id, status, start_date, timezone, person_authorized_at
+Immutable link to agreed version; withdrawal and activation use common row lock
+joining_conditions
+id, agency_id, joining_request_id, type, status, evidence_ref, verified_at
+Required condition completion recorded by approved reviewer or provider
+employments
+id, agency_id, person_id, joining_request_id, employee_no, state, start_date, end_date
+UQ joining_request_id; UQ agency_id and employee_no if number belongs to episode
+employment_terms
+id, agency_id, employment_id, effective_from, effective_until, pay_basis, role
+Tenant aware parent FK; prevent contradictory effective intervals
+employment_access_sources
+employment_id, membership_id, role_assignment_id
+Track grants derived from an employment so offboarding preserves unrelated roles
+
+Career data remains separately attributed and authorized after employment changes. Never copy former agency payroll, leave, client or disciplinary tables into the new employment. A rehire is another employment episode. The source joining request guarantees activation idempotency, but it does not prohibit legitimate later episodes.
+Representative tenant aware constraint
+CREATE TABLE design_employments (  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,  agency_id BIGINT UNSIGNED NOT NULL,  PRIMARY KEY (id),  UNIQUE KEY uq_emp_agency_id (agency_id, id)) ENGINE=InnoDB;CREATE TABLE design_assignments (  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,  agency_id BIGINT UNSIGNED NOT NULL,  employment_id BIGINT UNSIGNED NOT NULL,  PRIMARY KEY (id),  KEY ix_assignment_parent (agency_id, employment_id),  CONSTRAINT fk_assignment_employment    FOREIGN KEY (agency_id, employment_id)    REFERENCES design_employments (agency_id, id)    ON DELETE RESTRICT) ENGINE=InnoDB;
+The design_ prefix identifies an isolated example, not production migration names. Production tables add person, agency and workflow foreign keys in dependency order. Matching only employment_id would not prove that an assignment's agency_id is correct.
+11 Operational and commercial schema extensions
+Domain
+Tables and essential constraints
+Scheduling
+visits, visit_assignments, shift_series, scheduling_locks; own agency client and employment FKs; stable lock row per employment
+Time
+clock_events, work_sessions, timesheets, timesheet_versions, corrections; UQ agency_id and client_event_ref; exact approved source versions
+Leave
+leave_policies, leave_requests, leave_balance_locks, leave_ledger; immutable postings and UQ request action posting key
+Care
+clients, contacts, representatives, care_plan_versions, visit_notes, incidents, escalation_events; restricted assignment based views
+Assets
+assets, asset_custody, maintenance; UQ agency_id and asset_tag; authoritative current_assignment_id updated under asset lock
+Expenses
+expenses, reimbursement_instructions, reimbursement_items; one finalized payment instruction per expense or explicit reversal
+Subscription
+plan_versions, modules, features, agency_entitlements, subscriptions, billing_events; trusted provider reference and effective periods
+Payroll
+payroll_batches, payroll_lines, payroll_exports, provider_mappings; finalized snapshots, checksum and external reconciliation state
+Invoicing
+invoices, invoice_lines, source_quantity_allocations, receipts, receipt_allocations, credit_notes; unique agency invoice number and no duplicate source quantities
+Infrastructure
+documents, audit_events, idempotency_records, outbox_events, jobs, provider_inbox, retention_holds, support_access
+
+Additional accounting ledger tables are introduced only with the validated full accounting scope. Do not label the invoice and expense subsystem as a complete general ledger. Code paths for country tax calculation, statutory payroll and sensitive screening remain disabled until approved implementation and validation exist.
+12 Transaction and concurrency framework
+Use explicit transaction boundaries at the service layer on one database connection. Verify success and handle rollback even where database exception settings differ between framework environments. CodeIgniter supports transaction APIs and documents their behaviour [R5]; test the selected configuration and never assume every failed statement throws an exception.
+Default to InnoDB's configured isolation level and lock stable parent records for contended invariants. Transactions that mix snapshot and locking reads must recheck business decisions using current locked state. Do not change isolation globally to fix one queue query without testing the whole application. Lock dependent rows in a documented consistent order. A standard write order is agency security state, membership where needed, person employment guard, workflow root, then children ordered by key. Services may use a smaller subset but must not take overlapping locks in reverse order.
+Create the person employment guard at person creation, and scheduling and leave guard rows when an employment is created. These stable rows serialize cases where no child row yet exists. All paths writing the same invariant must acquire the same guard; a lock used by only one controller is ineffective. Acquire row locks by indexed predicates and keep transactions short. Never call email, signing, payment or screening APIs while holding them.
+Retry only recognized transient deadlock or lock timeout failures using bounded attempts with jitter. Every retry restarts the entire transaction and rechecks policies; never retry an uncertain external payment as if it were a local rollback. Use the idempotency record and unique constraints as final duplicate guards. Database documentation explains transactional locking reads and their limitations [R6].
+13 Employment activation algorithm
+Input: actor, agency reference, joining reference, request key1. Authenticate, resolve agency, validate permission and payload.2. Begin transaction and reserve scoped idempotency key.3. Lock the applicable agency security and person guard rows.4. Lock joining request and load current contract and conditions.5. Recheck actor, joining authorization and all current states.6. Require both parties to have agreed to the same version.7. Require start date reached in the agency timezone.8. Require completed conditions and approved overlap policy.9. If already activated, return its existing employment result.10. Create employment once using unique joining_request_id.11. Create or update membership and employment derived roles.12. Append audit and outbox; store idempotent result reference.13. Commit, then return employment reference and state.
+Contract material changes, candidate withdrawal and cancellation acquire the same person guard and joining lock when they affect an issued joining request. If withdrawal commits first, activation cannot proceed. If activation commits first, a later withdrawal request follows the employment ending process; it must not erase the fact of activation. Agency verification suspension and signing authority changes use the relevant shared authorization guards or versioned serialization contract so their interaction with activation is deterministic.
+A worker activates future dated requests through this service with a dedicated system actor and recorded authority. It does not pretend to be the candidate. Missing prerequisites create a pending action with a reason and retry only after relevant state changes. Pending offers and agreements are not automatically terminated by subscription failure; implement the owner approved lapse policy explicitly.
+Overlapping employments are structurally possible. Until policy is approved, a conflicting case requires review and must not terminate the earlier employer's record. Separate offers remain independently accepted, declined or withdrawn. One agency cannot close another agency's employment.
+14 Disclosure grant algorithm
+Resolve the requesting recruiter and identity confirmed person, verify agency status and history entitlement, then record a request with purpose, recipient membership IDs, categories, entry versions and expiry. Approval is performed from the candidate's own context. Store the exact approved scope and policy evidence. Do not allow a recruiter to submit the candidate's approval flag.
+For each view, lock or version check the live grant and relevant authorization root, evaluate validity against server time, check named recipient and project only allowed fields from approved career versions. Log the permitted disclosure metadata before releasing the response. A view that linearizes before withdrawal may complete; every request beginning after a committed withdrawal must fail. The product cannot recall information already delivered to a browser or downloaded copy.
+The default is authenticated viewing. Export requires an explicit grant category and records the exact retained snapshot and receiving agency responsibility. Reauthorize when an export worker starts and again before the completed file is made available. History downloads stream through an authenticated controller where feasible. Generic long lived signed URLs cannot provide immediate grant revocation. Other permitted short lived document links have an explicit bounded exposure interval.
+New career entry versions do not silently expand an existing grant. A disputed or corrected entry must not continue to be presented as undisputed current fact. The response may show the authorized historical version with its current dispute or superseded indicator; disclosure of replacement facts follows an approved correction notice or renewed grant. No sensitive case narrative appears in routine correction notifications.
+15 Scheduling attendance leave and asset algorithms
+For assignment creation or amendment, lock all affected employment scheduling guards in ascending ID order. Check half open interval overlap using existing_start < proposed_end and existing_end > proposed_start. Check qualifications, approved leave, availability and travel buffer policy while locked. Every scheduler, import and automated assignment uses that service. Leave approval acquires the same scheduling guard so a new shift and leave approval cannot both pass inconsistent checks. Client and branch references remain tenant scoped.
+Clock events use a client event UUID scoped to the agency, immutable capture and server receipt timestamps and a separate current session state. Lock the employment session guard before validating start, break and end transitions. Repeated event UUID with identical payload returns the previous result; different payload conflicts. No missing clock out is converted into invented actual work. UTC instants compute elapsed duration across overnight and daylight saving changes; local displays use the recorded timezone.
+Leave approval acquires scheduling and balance locks in the shared order, rechecks remaining entitlement, prohibits self approval, creates one immutable posting and creates coverage tasks for affected visits. Cancellation reverses the posting and retains its link. Define whether pending requests reserve balance; proposed default is no reservation, with validation repeated at approval. Complex accrual uses effective dated policy and separately tested country rules.
+Asset handover locks the asset, validates available state, inserts custody history and updates current_assignment_id atomically. Return locks the same asset, closes that assignment and sets availability or maintenance according to condition. A nullable returned_at unique index alone does not guarantee one open custody record. Expense reimbursement uses a finalized instruction reference and unique expense allocation to prevent duplicate payment through both payroll and finance.
+16 Search identity matching and geographic indexing
+Publish a separate approved directory projection, not a SELECT star from persons. Use normalized names for search while preserving original spelling, controlled geographic region relations, role and qualification indexes, visibility and availability confirmation dates. The first release can use indexed prefix matching and structured filters in MySQL. Add full text or a search service only after language and query plan testing establishes a need.
+All search results recheck current visibility before returning. Candidate discovery caches must either revalidate publication versions or be invalidated on pause; private profile fields never enter search indexes. Multiple region preferences use normalized rows. Radius matching uses a nominated region centroid or approved approximate reference, not an exposed home address. Distances represent preference matching, not route travel times; fall back to region matching when geocoding is unavailable.
+Restricted name and birth date matching is a separate POST workflow requiring an authorized purpose and jurisdiction feature flag. Do not log its raw body. Return a generic request reference before candidate confirmation, including ambiguous or no match cases, to avoid revealing private account existence. Require candidate account confirmation or a valid candidate generated sharing code before connecting the requester to a hidden identity. Rate limit by agency, recruiter and source, and investigate pattern abuse.
+Encrypt birth dates using an approved authenticated encryption library and versioned managed keys. If exact lookup tokens are needed, use a keyed HMAC over a versioned canonical name and exact date representation. Store token key version separately, restrict token queries and access, and rotate by controlled reindexing. An ordinary unsalted hash of a birth date is unsuitable because the possible inputs are easily guessed. Keyed tokens still leak equality to privileged access and are not proof of identity. Never make name plus birth date unique or automatically merge matching people.
+17 Idempotency events queue and callbacks
+idempotency_records contains scope type, scope ID, actor reference, operation, key digest, canonical request digest, state, result reference, timestamps and retention expiry. A unique scope, operation and key constraint prevents duplicate reservations. Reserve and finalize the record in the same transaction as local business changes. An in progress external action uses a durable provider operation reference and reconciliation state. On replay, reauthorize the actor before returning a reference and avoid caching sensitive response bodies.
+outbox_events contains event reference, aggregate type and ID, tenant or person scope, event type, schema version, minimal payload, created_at and publish state. Commit it alongside the business change. Avoid copying full health records or contract contents into events. Consumers deduplicate by event and handler version; notifications and provider submissions have their own deduplication reference.
+jobs contains state, handler, payload reference, available_at, attempts, lease_owner, lease_token, locked_until, last_error_code and deduplication key. Workers claim a small indexed due batch in a short transaction. FOR UPDATE SKIP LOCKED may be used only for queue claim logic; its inconsistent view is unsuitable for business decisions [R6]. Commit the lease before external work. Completion is conditional on the current lease token, with heartbeat or bounded processing time. A stale worker cannot mark a job completed after another worker has reclaimed it. Exactly once external side effects are not assumed; use provider idempotency or reconciliation.
+Provider callbacks enter provider_inbox after signature and replay validation. Unique provider and external_event_id prevents duplicates. Persist the verified event durably before acknowledging accepted receipt, then process asynchronously. A duplicate acknowledged event is not processed again. Out of order events trigger authoritative provider state reconciliation rather than rolling an entitlement backward. Unknown or uncertain financial outcomes remain uncertain and alert an operator; they are not silently retried as new payments.
+18 Documents cryptography and retention
+documents stores reference, classification, person or agency owner, related record, private storage key, MIME type, size, digest, scan status, encryption metadata and retention category. A document cannot be both implicitly public and sensitive. Allowlist sizes and types, quarantine uploads, scan content, reject executable formats where unnecessary and block path traversal. Do not rely on filename extension alone. Storage names are generated references rather than original personal filenames.
+Downloads resolve the related record and policy before opening storage. Contract access requires party or authorized agency scope; health evidence requires designated HR or clinical permission; history evidence requires the precise grant and category. Notifications contain authenticated links and no medical, salary, birth date or adverse reference details. Set appropriate content disposition, MIME and no sniff headers.
+Use managed secrets and keys, authenticated encryption with recorded format and key reference, and separate matching and encryption keys. Do not design custom cryptography. Key rotation includes readable historical data, token reindexing where needed and a recovery exercise. A backup without access to required keys is not a viable recovery copy.
+Retention rules map purpose, jurisdiction, record category, retention start event and deletion action. Legal holds override normal disposal. Candidate withdrawal affects future sharing; it does not promise deletion of a receiving employer's required retained evidence. A personal deletion request is reviewed against obligations and provenance. Pseudonymization, backup aging and legal hold release need documented procedures; soft delete flags alone do not satisfy retention.
+19 Subscription payroll and finance adapters
+Entitlement evaluation uses trusted catalog and subscription state plus effective dates, limits and dependencies. Separate agency verification from purchase. Increment an entitlement version on changes and invalidate cached decisions. A candidate appearing in search is not a billable employee seat. Billable usage is computed from the approved membership definition and unique source events, not from page views.
+Subscription purchases have a server created quote version, provider request and confirmed outcome. A browser success redirect cannot activate features. Repeated callbacks cannot add duplicate paid periods or receipts. Cancellation and downgrade preserve historical records and permitted personal access according to the approved policy. Paid tiers do not widen disclosure grants.
+PayrollExportAdapter validates employee provider IDs, earning mappings, exact approved time and expense snapshots, checksum and batch reference. PaymentSubmissionAdapter is a later capability with prepare, submit, reconcile and cancel where provider supported. Distinguish exported, accepted, paid, failed and uncertain. Finalized payroll corrections use adjustments and reversals. Tax or statutory calculations are not inferred from an hourly rate multiplication.
+Invoice generation locks or atomically reserves uninvoiced approved quantities. Store rate, tax and agreement snapshots with the line. Partial invoicing uses quantity allocations rather than a simple billed flag. Finalized quantities and invoice numbers have unique or transactional guards. Accounting adapters declare source of truth, external record mapping and reconciliation. A full native ledger, when introduced, enforces balanced immutable postings, period locks and reversal references separately from invoice statuses.
+20 Environment and deployment design
+Use local development, automated test, staging and production environments with separate secrets, databases, buckets and provider accounts. Local development may use containers with pinned PHP, Nginx and MySQL; the runtime database must match production major release and modes. A developer on Windows can use the same Linux container images. Containerization is proposed, not required by CodeIgniter.
+Only the public directory is the web document root. app, vendor, writable, .env and private files must not be directly served. Terminate TLS at the trusted ingress, configure forwarded headers for that proxy only, restrict PHP execution to the front controller and deny arbitrary uploaded PHP files. Enable OPcache with deployment appropriate invalidation and PHP worker limits validated by load testing.
+Configuration class
+Required values and controls
+Application
+Environment, HTTPS base URL, supported locales, timezone defaults and session settings
+Database
+Private hostname, port, database name, TLS mode and scoped runtime credentials
+Identity and keys
+Secret store references, encryption key versions, matching key versions and MFA configuration
+Storage
+Private bucket or directory, scanner settings, maximum size and document categories
+Providers
+Separate credentials and verified callback configuration for mail, billing and later payroll or signing
+Jobs
+Worker identity, maximum attempts, lease durations, batch limits and schedule
+Operations
+Monitoring destination, alert routes, backup policy, recovery location and retention settings
+
+Use the exact CodeIgniter environment names required by installed configuration classes in the implementation's .env.example; the table describes categories, not invented automatically recognized variable names. Do not commit working secrets. Deploy artifacts from CI with locked Composer dependencies and generated assets, never by editing production PHP manually.
+21 Release migration rollback and recovery
+The CI pipeline installs from composer.lock, validates dependencies, checks syntax and style, runs static analysis and unit tests, creates a MySQL service for migrations and integration tests, runs critical browser tests, scans dependencies and builds an immutable artifact. Suitable proposed tools are PHPUnit, PHPStan and a chosen PHP style checker; versions and rules belong in the repository. Failing authorization or financial integrity tests block release.
+Deploy using expand, migrate, release and contract sequencing. Add backward compatible nullable fields or new tables first, backfill in resumable audited batches, deploy readers and writers that tolerate the transition, and remove obsolete structure only in a later release. MySQL schema statements can cause implicit commits [R7]; a down migration must not be treated as a guaranteed rollback of arbitrary production DDL.
+Before rollout record artifact and schema versions, backup status, maintenance plan and rollback or forward fix procedure. Prevent concurrent migration runners. Gracefully drain workers; reclaim only expired leases. Smoke test personal login, agency context, entitlement, authorized history read, grant withdrawal and joining readiness before broad exposure. Keep code rollback compatible with the current schema. Restore from backup only under an incident plan that considers loss and reconciliation of transactions after that backup.
+Proposed initial targets are 99.5 percent monthly availability, 24 hour recovery point and 8 hour recovery time; owner agreement is required. Configure encrypted scheduled backups and test restores including documents, keys, users, grants, pending jobs and provider reconciliation. If the business later requires a shorter recovery point, introduce tested binary log point in time recovery and corresponding retention and monitoring. A backup success message without a restore exercise is insufficient.
+22 Observability performance and audit
+Propagate a correlation ID across HTTP, audit, outbox, jobs and provider operations. Separate application error logs, security events and business audit records. Log actor references, agency or person scope, action, target reference and result; do not log raw request bodies containing identity, care or financial details. Audit history records attribution and controlled changes without copying every sensitive field into a second ungoverned store.
+Monitor availability, response latency, error rate, denied sensitive access, identity probe patterns, queue age, lease expiry, failed jobs, database deadlocks, connection saturation, storage errors, backup age and provider reconciliation backlog. Alerts identify the owner and runbook; a notification channel without a responsible operator is incomplete.
+Proposed pilot load profile is 50 agencies, 100 concurrent users and 10,000 candidate profiles. Target the 95th percentile of common interactive requests within 2 seconds under this profile; measure report and bulk export completion separately. These are planned tests, not measured service claims. Protect slow reports with background execution and quota, and reauthorize exports at delivery.
+Start with compound indexes matching scope and sort, such as agency_id plus status plus start_at for visits and agency_id plus person_id plus status plus valid_until for grants. Use EXPLAIN on realistic cardinalities. Avoid leading wildcard name scans, unbounded lists and per row document queries. Use keyset pagination for large stable ordered records. Add a shared cache or replicas only after evidence; authorization sensitive reads must not use stale replica state that permits access after revocation.
+23 Technical verification plan
+Test group
+Required verification
+TV 01 Identity
+Account claim, verification, reset, MFA, privilege changes and global versus agency revocation
+TV 02 Isolation
+Every repository, route, file, export, cache and job rejects a foreign agency reference
+TV 03 Personal independence
+Unemployed account, own profile and privacy actions work without agency subscription
+TV 04 Search privacy
+Publication preview equals response projection; pause blocks later results; raw identity never enters logs
+TV 05 Matching
+Same name and birth date for different people produces no merge or premature disclosure
+TV 06 Disclosure
+Field categories, exact versions, recipient scope, expiry and withdrawal checked per operation
+TV 07 Disputes
+Confirmed but disputed records retain labels and correction provenance without false verification
+TV 08 Contract
+Different versions cannot satisfy mutual agreement; unauthorized agency signer rejected
+TV 09 Activation races
+Two activations create one episode; withdrawal, suspension and changed terms have deterministic order
+TV 10 Operations
+Scheduling versus leave, duplicate clocks, overnight time, balance races and asset handover races
+TV 11 Finance
+Duplicate export or callback, invoice quantity allocation, uncertain payment and no double reimbursement
+TV 12 Infrastructure
+Worker crash, lease takeover, stale completion, repeated event and reordered callback
+TV 13 Integrity
+MySQL tenant FKs, CHECK rules, unique keys, version conflicts and deadlock retries
+TV 14 Deployment
+Clean database migration, upgrade from prior release, smoke tests, secret absence and web root exposure
+TV 15 Recovery
+Restore database, objects and keys; catch up jobs without duplicate external submissions
+TV 16 Interface
+Keyboard and mobile critical flows, readable errors, workspace change and safe form preservation
+
+Run database and concurrency tests on MySQL 8.4 with the same relevant isolation and SQL modes as production. SQLite tests do not establish InnoDB correctness. Use separate connections and controlled synchronization barriers to prove competing operations actually overlap. Use provider sandbox contract tests and signed callback fixtures. Use synthetic agencies and candidates; never use live private career data for a convenient test fixture.
+Trace the functional specification's AT 01 to AT 27 to the relevant service, endpoint and automated or documented manual test. Store the coverage map in the repository and fail a release when mandatory denial or integrity cases are missing. Perform an independent access control review before real cross agency disclosures are enabled.
+24 Implementation sequence and acceptance of technical work
+Increment 1 creates the CodeIgniter project, locked dependencies, environment templates, CI, MySQL migrations, Shield integration, personal and agency contexts, scoped repositories and audit infrastructure. Prove two agency isolation before building shared recruitment data.
+Increment 2 delivers verified agencies, versioned entitlements, personal profiles, geographic preferences and approved directory projection. Increment 3 adds invitations, identity confirmation, career versions, grants, disputes and disclosure audit. Increment 4 adds offers, same version contract agreement, joining authorization and idempotent scheduled employment activation. These increments comprise Release A.
+Release B adds staff and qualification administration, clients, scheduling, online attendance, leave, basic care notes, assets, expenses, payroll export and reports. Release C adds invoicing and chosen integrations. Native tax payroll, specialist clinical functionality and complete accounting ledger remain separately validated scopes. Offline capture is advanced work requiring device storage and conflict specifications before implementation.
+Each increment delivers working persistent workflows, migrations, meaningful tests, API documentation, permission map and operator notes. No feature is complete when a button merely displays a success message. No missing provider integration may be represented as successful real payment, signed agreement or completed regulatory check. Maintain a requirements checklist and known decision log with owner and due milestone.
+25 Decisions dependencies and technical handoff
+Open decisions include launch jurisdiction and data region; whether employed candidates can opt into discovery; operational multiagency rules; verification and signing providers; authorized career fields and retention; subscription pricing and seats; payroll and accounting providers; hosting budget; support staffing and recovery targets. Defaults remain those in the functional specification. Changing one requires an explicit decision record with data migration and authorization impact where applicable.
+Developer handoff must include repository setup, composer.lock, .env.example without secrets, schema migrations and a generated database diagram, seeders for two fictional agencies, permission and filter maps, OpenAPI contract, worker commands and schedule, provider sandbox setup, test instructions, deployment and restore runbooks, key rotation procedures and traceability to functional tests. The exact full DDL and OpenAPI specification are implementation artifacts to be completed from this design, not attachments implicitly created by this document.
+First action for Codex is to inspect the target repository and record its framework version, dependency compatibility and migration state. Build or adapt the foundation without silently overwriting an existing application. If CodeIgniter 3 is present, obtain a migration decision before applying a CodeIgniter 4 structure. Continue independent work while business decisions remain open, but do not enable real sensitive checks or financial processing using invented policy.
+26 Principal endpoint implementation contracts
+The following endpoints complement the functional specification's route catalog. All agency references resolve through AgencyContext. POST actions require CSRF for browser sessions and the documented permission; nonbrowser credentials require their own scoped authentication. Public references in payloads are resolved to scoped internal keys before services execute.
+Endpoint and method
+Input contract
+Service and outcome
+PATCH /api/v1/me/profile
+Allowed profile fields and expected_version
+CandidateProfileService updates only own fields; returns approved own profile projection and new version
+POST /api/v1/me/profile/publish
+Preview version, discovery choice and policy version
+PublicationService validates minimum profile and confirms exact published projection
+GET /api/v1/agencies/{agency}/candidates
+Name or structured filters, safe sort and page cursor
+CandidateSearchService returns summaries only, with availability timestamp
+POST /api/v1/agencies/{agency}/identity-requests
+Name and restricted birth date or candidate code, purpose and case reference
+IdentityMatchService returns neutral request reference, never a hidden account count
+POST /api/v1/agencies/{agency}/history-requests
+Confirmed person reference, case, categories, recipients, versions and requested expiry
+HistoryDisclosureService records requested scope; no read grant yet
+POST /api/v1/me/history-requests/{request}/decision
+Approved categories and versions or decline, policy version and expected_version
+DisclosureDecisionService records candidate decision and exact grant
+POST /api/v1/me/disclosure-grants/{grant}/withdraw
+Expected version and optional reason
+GrantWithdrawalService withdraws future access and audits outcome
+GET /api/v1/agencies/{agency}/history-requests/{request}/entries
+Request reference and bounded pagination
+HistoryReadService projects only entitled approved versions and current dispute labels
+POST /api/v1/agencies/{agency}/contracts/{version}/accept
+Exact document digest, step up evidence and request key
+ContractAgreementService records authorized agency party acceptance; candidate route acts only as person
+POST /api/v1/me/joining-requests/{request}/decision
+Explicit authorization or refusal, exact contract version and step up evidence
+JoiningDecisionService records the individual's agency link decision
+POST /api/v1/agencies/{agency}/joining/{request}/activate
+Expected version and idempotency key
+EmploymentActivationService atomically checks readiness and returns one employment reference
+POST /api/v1/agencies/{agency}/clock-events
+Event UUID, employment, assignment, type, occurrence time and timezone
+ClockEventService deduplicates capture and validates session transition
+POST /api/v1/agencies/{agency}/assets/{asset}/assign
+Own agency employment, condition, handover, expected return and expected_version
+AssetCustodyService creates history and current custody under lock
+
+Contract decisions by the individual use /api/v1/me/contracts/{version}/accept and derive party identity from the session. The agency acceptance route must never be reused to accept on behalf of the person. A step up evidence reference is server issued and session bound; a browser supplied boolean such as mfa_complete is not evidence.
+Publish OpenAPI schemas with concrete max lengths, enums, reference formats, decimal representation, security requirements and response examples before frontend integration. Route tests verify every method, filter and alias and ensure automatic or alternate URLs cannot bypass them.
+27 Project setup and operational command contract
+The following framework commands illustrate the expected developer workflow after repository creation and compatible dependency selection. Follow installed package instructions for Shield setup. Do not run setup against a production database without the release procedure.
+composer installphp spark migrate --allphp spark db:seed DemoSeedervendor/bin/phpunit
+DemoSeeder is an application supplied seeder containing synthetic data and a production guard; it does not exist until implemented. The database migration command must be verified against the application's configured migration namespaces. Use a separate migration credential and never seed production by default. Local development may use php spark serve bound only to a development interface; production uses the configured web server and PHP FPM.
+Define these application supplied CLI commands and register them as deployment artifacts: caresys:jobs:work with batch and run limits; caresys:employment:activate-due; caresys:grants:expire; caresys:retention:preview and caresys:retention:execute; caresys:providers:reconcile. Command names describe the intended contract and are not built in framework commands. Use an OS scheduler or supervised workers with restricted service credentials, structured logs and health checks. Retention execution requires a reviewed policy, hold checks and an auditable preview reference.
+Record actual command arguments, service units, intervals and timeout values in the implementation runbook. Staging must prove worker restart, duplicate runner behaviour and catch up after an outage before production deployment. No scheduled action may require an agency administrator to keep a browser open.
+28 Official technical references
+Reviewed 23 October 2026. Technical selections and algorithms above are application design decisions. Official documentation supports the specific framework and database capabilities cited, and should be rechecked when dependencies are pinned.
+[R1] CodeIgniter server requirements: https://codeigniter.com/user_guide/intro/requirements.html
+[R2] CodeIgniter Shield authentication: https://shield.codeigniter.com/latest/references/authentication/authentication/
+[R3] CodeIgniter explicit routing and filter behaviour: https://codeigniter.com/user_guide/incoming/routing.html
+[R4] MySQL 8.4 foreign key constraints: https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html
+[R5] CodeIgniter database transactions: https://codeigniter.com/user_guide/database/transactions.html
+[R6] MySQL 8.4 locking reads, including queue oriented SKIP LOCKED: https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html
+[R7] MySQL statements causing implicit commits: https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html
+[R8] PHP supported release lifetimes: https://www.php.net/supported-versions.php

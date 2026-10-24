@@ -1,0 +1,11 @@
+# XAMPP must not expose application source, Word specifications or local credentials.
+# A production virtual host must point directly at the public directory.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^$ public/ [L]
+    RewriteRule ^public(?:/|$) - [L]
+    RewriteRule ^ - [F,L]
+</IfModule>
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

@@ -1,0 +1,484 @@
+CareSys Agent
+Functional specification for CodeIgniter and MySQL
+Version 2.0 | 23 October 2026 | Proposed implementation baseline
+1 Purpose and authority
+This specification translates the CareSys Agent Business Requirements version 1.1 into functional behaviour, application responsibilities, logical database records and acceptance tests. It is intended for the product owner, Codex, developers and testers building the online application. It replaces the earlier functional specification as the current development brief. The business requirements remain authoritative for business intent; unresolved policy choices must not be silently treated as approved.
+The confirmed technology choices are CodeIgniter and MySQL. This document proposes CodeIgniter 4, a compatible maintained PHP release and MySQL 8.4 LTS with InnoDB. CodeIgniter 3 is outside this design. Confirm supported patch releases, PHP extensions and hosting compatibility when creating the project. The official CodeIgniter requirements page is the compatibility reference [T1].
+The application will support agency business operations and a shared recruitment service. A caregiver keeps a personal account regardless of employer. Agencies may search eligible profiles and obtain authorized career history, then establish employment only after mutual contract agreement and the person's explicit joining authorization. Joining never transfers a former employer's private records.
+Delivery scope
+Release A delivers identity, agency administration, subscriptions and entitlements, personal profiles, recruitment search, authorized history, disputes, offers, contracts and employment activation. Release B adds scheduling, time, leave, basic care operations, assets, expenses, payroll export and operational reports. Release C adds client invoicing, provider integrations and advanced features. A native statutory payroll engine and complete accounting ledger require separately validated country rules before production use. These release boundaries are proposed sequencing, not removal of the broader business scope.
+2 Terms and operating model
+A tenant is an agency and its branches. A user is a login identity. A person is the caregiver's continuing personal record. A membership grants a user access to an agency workspace. An employment relationship records an agency's engagement of a person. Membership and employment are separate: recruiters can have agency access without being caregivers, and a future employee may have limited onboarding access before employment begins.
+A career entry is a deliberately limited, attributable record of employment or experience. It is not an employer's HR file. A disclosure grant permits named information to be shared with a specific agency for a stated recruiting purpose and time period. An entitlement enables a purchased module or feature; it never replaces permission or consent checks.
+Use three explicit data scopes: personal records controlled through the person's account; agency private records confined to that tenant; and shared career records disclosed through a dedicated authorization service. Do not put a single current_agency_id on a person and use it as ownership of all their history.
+3 Roles permissions and access rules
+Role
+Allowed functions
+Restriction
+Candidate or caregiver
+Own profile, preferences, applications, authorizations, offers and personal history
+No other person's records or agency private HR files
+Agency owner
+Agency settings, modules, staff roles and delegated administration
+Sensitive care and finance still use explicit permissions
+Recruiter or HR
+Candidate search, permitted checks, own vacancies, offers and onboarding
+Verified agency and recruitment entitlement required
+Scheduler
+Own agency staff availability, clients and assignments
+No bank records or unrestricted recruitment files
+Supervisor
+Assigned staff, time, leave, care exceptions and assets
+No self approval
+Payroll or finance
+Approved time, pay inputs, reimbursements and billing
+No unrestricted clinical narrative or other employers' records
+Platform operator
+Agency verification, plans, service support and dispute administration
+Tenant content requires limited, approved, audited access
+
+FND 01: Every protected operation must evaluate authenticated user, active account, workspace context, current membership, permission, branch or assignment scope, entitlement, record state and any disclosure grant required. Personal workspace actions do not require agency employment or an agency subscription. Reevaluate access at the time of each read, export and download.
+FND 02: Example permissions include recruitment.search, history.request, history.read_granted, offers.issue, contracts.sign_for_agency, employment.activate, employee.manage, time.approve, leave.approve, asset.assign, payroll.export and finance.post. Keep role assignment scoped to membership. Global authentication roles must not accidentally grant an agency role in every tenant.
+FND 03: Deny by default. An unauthorized request for another tenant's object returns a consistent nonrevealing not found response. A known feature restriction may return a feature unavailable response without exposing another person's data. Each user sees the active personal or agency workspace. Switching workspace invalidates stale forms and client caches; a request containing inconsistent workspace context fails rather than moving records.
+FND 04: Use CodeIgniter Shield as the proposed authentication package [T2]. Application services remain responsible for tenant, branch, record and disclosure policies. Require verified email, secure reset, privileged role MFA, session revocation and step up verification for signing and highly sensitive changes. The exact MFA and signing integrations must be chosen and tested; do not assume installation of an authentication package completes them.
+4 Accounts agency setup and subscriptions
+FND 05 Personal registration
+Inputs: email, password, accepted terms version and privacy notice acknowledgement; name follows during profile setup. Verify email before publication or sensitive requests. Registration and password reset use nonenumerating responses. A verified personal user receives a person record but no agency membership. Account statuses are pending verification, active, suspended and closed. Job seeking, application and employment statuses are stored separately.
+An existing agency worker can claim or link their personal identity through a controlled invitation and identity confirmation process. Do not merge people on name, birth date or email similarity alone. Duplicate identity cases enter operator review with the individual's involvement and preserved record provenance. Agency HR may suspend its own membership but cannot suspend the person's global account.
+FND 06 Agency onboarding
+The owner supplies legal name, business identifier where applicable, country, timezone, currency, contact information and branches. Agency verification progresses pending -> verified, rejected or suspended, with evidence and reviewer. Pending agencies may complete setup but cannot search or request protected career history. Invitations identify tenant, role and branch scope, expire after a configurable period and are single use.
+SUB 01 Module catalog and access
+Represent modules, plan levels, feature keys, limits, dependencies and effective dates in catalog records. Proposed modules are Core, Recruitment, History checking, People, Scheduling, Time, Leave, Care, Assets, Expenses, Payroll, Finance and Reporting. Each purchased module has Essential or advanced features according to the plan. Core security, personal privacy controls and required record access are not premium options.
+The selection preview shows module dependencies, recurring charges, currency, tax, discounts, renewal and proration. Prices and limits are configurable and remain unapproved. Selecting Payroll requires People and approved Time data; scheduling requires basic client and staff records. A paid history feature does not bypass a person's disclosure grant.
+SUB 02 Subscription lifecycle
+States: trial, active, past_due, grace, restricted and cancelled. Trusted provider confirmation or an audited manual entitlement agreement changes access; browser success redirects do not. Upgrades activate after confirmation. Downgrades normally take effect at renewal and show affected features. Cancellation ends new paid access after the paid through date while preserving approved retention and export arrangements.
+Separate candidate profiles from billable agency seats. No search result or application creates a seat. The billable membership definition, grace duration, trial length, pricing and country tax treatment are owner decisions. Restricted subscriptions retain a defined route for authorized historic records, subject access and legally required retention. They do not retain new paid search rights indefinitely.
+Acceptance: a verified personal account works without an employer; an unverified agency cannot search; a direct API request cannot invoke an unpurchased feature; duplicate billing callbacks cannot duplicate entitlement periods.
+5 Personal profile geography and preferences
+PRO 01 Profile fields and validation
+Field group
+Required behaviour
+Names
+Legal and preferred name; preserve original spelling and support Unicode; normalized search name is separate
+Identity
+Restricted date of birth and identity verification status; birth date must be real and not in the future
+Contact
+Verified email, optional verified phone, private home address; recruiter contact disclosure is separately controlled
+Experience
+Summary, role categories, service settings, language skills and employment entries
+Qualifications
+Type, issuer, reference, issue and expiry dates, evidence, review status and reviewer
+Geographic preferences
+Multiple country and region selections, town or postal area, travel radius with unit, relocation and transport preferences
+Work preferences
+Engagement types, day or night or weekend patterns, desired hours, start availability and notice period
+Care preferences
+Relevant skills, service setting and task preferences; no client information
+Pay preference
+Optional minimum and maximum with currency and hourly or other basis; minimum cannot exceed maximum
+Visibility
+Draft, private, discoverable or paused; contact and information sharing choices are separate
+
+Save incomplete profiles privately. Proposed publication minimum: verified account, display name, professional role, at least one preferred region, availability declaration, recruitment summary and affirmative discovery choice. Do not require bank information or sensitive identity evidence merely to publish a summary. Required credential verification for an assignment is a later eligibility decision, not an implied guarantee from listing a profile.
+PRO 02 Publication and freshness
+The individual previews the exact summary recruiters will see before publishing. General results exclude full birth date, home address, direct contact details unless authorized, documents, banking and private notes. Store availability confirmation date; show stale information and ask the person to refresh it. Pausing removes the summary from subsequent directory requests and invalidates cached results. Existing applications and lawful retention remain separately governed.
+Represent declared employment separately from recorded platform relationships. Display no current agency relationship recorded where appropriate; never infer that a person is unemployed merely from missing platform records. Initially support unemployed self registration. Discovery for currently employed candidates is a policy controlled feature awaiting owner approval; keep it disabled by default while retaining their personal accounts and existing applications.
+Acceptance: a candidate can publish two regions and weekend availability, preview the summary, edit preferences and pause discovery. Recruiters cannot retrieve hidden fields through alternate response formats or exports.
+6 Recruitment discovery and identity matching
+REC 01 Directory search
+Preconditions: active recruiter membership, verified agency, recruitment permission, purchased feature and recorded vacancy or recruiting purpose. Filters: candidate name, preferred regions, role, relevant skills, qualification type and status, experience, work type and available dates. Support pagination, safe sort fields and configurable usage limits. Return candidate reference, approved summary, preferences, qualification indicators and last confirmed availability. Default order is relevant work and location match; no age based ranking.
+Use controlled region codes rather than free text alone. Region matching is exact or hierarchical according to stored geography definitions; travel radius matching requires an agreed area reference and distance method. A radius match indicates a potential preference fit, not promised commute time. If geocoding is unavailable, use region selection rather than inventing distances.
+REC 02 Name and date of birth check
+This is a separate restricted lookup workflow, not a birth date filter on general directory search. A recruiter submits name, exact birth date, purpose and vacancy reference using a protected form or POST request. Do not place birth dates in URLs, application access logs or analytics. The feature is disabled for a jurisdiction until its permitted use is confirmed; candidate invitation or reference code remains available.
+A possible match initiates private identity confirmation. Before the individual responds, show a neutral request outcome that does not reveal whether a hidden account exists, how many matches exist, a full profile or employment details. A known candidate may instead supply a single use sharing code. Name and birth date alone never authorize disclosure, establish account control, merge identities or create employment. Multiple or uncertain matches are held for resolution; fuzzy matching may suggest a review case but not combine records.
+REC 03 Candidate invitation
+Invite a known candidate through verified email or a candidate generated reference. The message identifies the agency and purpose, contains no private history and provides accept or decline. If no account exists, the individual can register and respond after verification. Invitations are single use, revocable and expire. Responses to recruiters must avoid revealing preexisting private accounts before acceptance. Do not notify a candidate's current employer of job seeking without the individual's authorization or a defined applicable obligation.
+REC 04 Recruitment case
+Vacancies capture title, region, role, required qualifications, work pattern, compensation basis if offered and closing date. Applications are agency scoped and link to the person, vacancy and originating invitation when applicable. Stages: invited or applied, reviewing, interview, checks_pending, offer_issued, offer_accepted, contract_agreed, onboarding and employed. Terminal outcomes: declined, withdrawn, unsuccessful, cancelled and expired. Record transitions, actor, reason and timestamp; candidate withdrawal stops future progression unless a new application is agreed.
+Acceptance: an entitled verified recruiter can search eligible summaries; a private person can receive an invitation without becoming discoverable; repeated unauthorized birth date probes are rate limited and audited without revealing account existence.
+7 Career history authorization and disputes
+HIS 01 Career entry
+Store person, employer name or agency reference, role, service category, engagement type, start and end dates, date precision, responsibilities, source and verification evidence reference. Permit unknown dates and month or year precision; do not substitute invented day values as exact dates. Distinguish self declaration, documentary support and employer or provider confirmation. Keep dispute status separate so a formerly confirmed entry can also be disputed. Each revision retains author, source, timestamp and superseded version.
+Agency private records do not become shared career entries automatically. An agency may contribute a limited employment confirmation under approved policy and notices, while the individual can add external employment. A source employer can correct its own contributed information through a versioned process; it cannot edit another source's entry. Confirmation records what was checked and when, and never implies that every background check is complete.
+HIS 02 Disclosure request
+Inputs: person reference after identity confirmation, requesting agency, recruitment case, purpose, categories requested, named recipient scope, requested expiry and whether export is requested. The candidate sees all these details and can approve selected allowed categories or decline. Distinct scopes cover career summary, qualifications, references, contact, sensitive checks and joining. A joining authorization does not authorize historical disclosures.
+Request statuses: requested -> approved or declined; approved -> withdrawn or expired. A withdrawn or expired request cannot be reactivated; create a new request. A renewal must disclose its new terms. An approved grant includes the person, requesting agency, approved recipients, specific categories and entry scope, validity dates, policy version and decision evidence. Subsequent entry versions are not silently included; an approved policy and new authorization must govern any expansion. Corrections to an already shared entry must visibly alert entitled recipients without adding unrelated information.
+HIS 03 Authorized viewing and export
+Each read checks agency verification, current recruiter permission, history entitlement, person match, approved grant, expiry, withdrawal and scope. Return an explicit field projection from shareable entry versions; never query a former employer's private HR record as a shortcut. Download authorization repeats these checks. Files are private and use short expiry links; restricted history exports use authenticated streaming or equivalent revocable access where possible.
+Default is on screen viewing. If export is expressly permitted, record what was shared, by whom, with whom, why and when, and explain the receiving employer's retention responsibility. Revocation stops new access but cannot recall an already lawfully downloaded copy. Separate authorized retained recruitment evidence from continued live access to the candidate's profile. The person can review meaningful disclosure activity, subject to defined lawful restrictions.
+HIS 04 References sensitive checks and disputes
+Reference requests identify the referee, candidate, requesting agency, purpose and authorization. Verify the response source and preserve nonresponse as incomplete rather than adverse. Reasons for leaving, performance references, safeguarding matters, criminal record and health information are excluded from ordinary history projections. Any permitted specialized check requires a separately approved country policy and provider process.
+A person can raise a dispute against an entry version, attach evidence and request correction. States: open, awaiting_source, under_review, resolved and appealed. Assign a reviewer, preserve submissions and show disputed facts as disputed. Record decision, reasons, revised version and notice to affected parties. No automatic adverse score or shared employee blacklist is allowed. Account access and correction rights cannot depend on the source employer retaining a subscription.
+Acceptance: Agency B sees only the history categories and versions authorized by the person; a withdrawn grant fails on the next protected read; a disputed entry cannot appear as undisputed verified fact; salary, disciplinary case and client data never appear in a career history response.
+8 Offers contracts and agency joining
+EMP 01 Offer and contract versions
+An authorized recruiter issues an offer linked to the agency, person and recruitment case. Capture role, employment type, place or geographic area, pay basis and currency, work terms, intended start date, conditions and expiry. Attach a versioned final contract and applicable policies. Record offer decision separately from agreement to the contract.
+Contract versions are immutable once issued for acceptance. Each acceptance records party, authorized capacity, exact version, document digest, decision time and acceptance method. Require step up identity verification. Both parties must accept the same version. Material edits create a new version, invalidate readiness based on earlier signatures and require renewed agreement. A signing provider callback must be verified and reconciled before marking acceptance complete. Recorded electronic acceptance and a legally qualified digital signature are not interchangeable claims.
+EMP 02 Joining request and activation
+The agency requests an employment link against the agreed contract. The person expressly authorizes joining that agency; keep this evidence separate from history permissions. Track joining requested, authorized, declined, withdrawn, ready, activated or cancelled. Employment itself progresses pending_conditions -> pending_start -> active -> ended, with cancelled_before_start available before activation.
+Activation requires all of the following at execution time: person identity resolved; agency allowed to employ within platform policy; same final contract version agreed by both authorized parties; joining authorization valid; required checks complete; start date reached in the agency timezone; no withdrawal or cancellation; membership and branch policy valid. An active recruitment subscription is required to initiate the paid recruiting workflow, but historical retention and already contracted joining must follow an explicit lapse policy rather than silently invalidating an agreed contract.
+Create or activate the employment and appropriate membership in one transaction, record audit evidence and enqueue notices. Activation, cancellation and candidate withdrawal must acquire the same stable joining request lock and recheck the current contract and authorization version before committing. If withdrawal commits first, activation fails; if activation commits first, a subsequent request follows the applicable employment ending process rather than pretending no employment existed. A scheduled activation job uses exactly the same checks as an authorized manual activation. Failures create a visible pending action, not a false success. Repeated activation returns the existing result; it must not create a second employment or seat charge.
+EMP 03 Previous and overlapping employment
+Create a new relationship, never replace a global current employer value. The former employer alone manages its own ending process and actual end date. Its payroll, leave ledger, assets and client records remain with it. A new employer receives only separately authorized information. No assumed prior employer veto is introduced by this design.
+The database supports distinct overlapping relationships. Until the owner approves an operational multiagency policy, any potentially conflicting activation goes to review and is not resolved by ending another agency's employment. Staff cannot see another agency's shifts or clients. Any later cross agency availability sharing requires a specific privacy and availability policy. Concurrent offers remain independent: accepting or declining one does not decide another, and the individual must explicitly respond to each. Withdrawing an offer before activation cancels its pending joining process and cannot leave an active employee record behind.
+EMP 04 Offboarding and rehire
+Ending employment revokes related operational access promptly, flags unreturned assets, future shifts and pending administration, and preserves required history. Preserve any separately authorized agency administrative membership rather than indiscriminately deleting all roles. Rehire creates a new employment episode referencing the same person and agency; past dates and terms remain intact. The person retains their personal account, own disclosures and job seeking controls.
+Acceptance: an employer cannot activate a person by search or unilateral approval; future dated contracts remain pending; changed terms require renewed acceptance; two simultaneous activation attempts produce one employment episode; joining Agency B never terminates Agency A automatically.
+9 Employee operations and service delivery
+OPS 01 Employee administration
+Agency employee records contain agency employee number, employment episode, branch assignments, supervisor, job category, employment dates, effective dated terms, availability and agency private documents. Qualifications have evidence, issuer, expiry and verification. Notify nominated reviewers before expiry; an assignment requiring an expired qualification is blocked unless an explicitly permitted, audited exception applies. A personally shared qualification can inform onboarding, but the agency records its own acceptance and verification responsibility.
+OPS 02 Scheduling
+A visit contains agency, branch, client, location, service type, timezone, planned start and end, required qualifications and service instructions. Each caregiver assignment is separate, allowing multiple staff on one visit. States: draft, published, accepted where required, in_progress, completed, cancelled or no_show. Recurring series create occurrences; changing a series must not rewrite completed visits.
+Before publication and assignment, check own agency employment eligibility, availability, approved leave, qualifications, overlapping work and configured travel buffers. Planned end must follow start; overnight visits are valid. Serialize assignment changes against a stable employee scheduling lock before checking overlap so two concurrent requests cannot both pass. Cancelled visits retain actual work and cancellation reasons; they do not automatically erase pay entitlement.
+OPS 03 Time attendance and approval
+Capture clock in, break start, break end and clock out for an assignment or permitted travel, training or other work category. Store immutable events with actor, agency employment, occurrence time, server receipt time, timezone, source and unique event reference. An employee cannot have two conflicting active work sessions within the same employment scope. Missing clock out creates an exception rather than invented hours.
+Keep planned time, worked time, paid time and billable quantities separate. No automatic unpaid break deduction merely because a break was scheduled. Location capture is optional under an approved event based policy with an exception path for unavailable GPS. Offline capture is a later advanced feature requiring separate encrypted cache, synchronization and conflict handling; initial capture is online.
+Corrections retain original events, proposed values, reason, reviewer and outcome. Timesheet states are draft, submitted, returned, approved and locked. Approval applies to an exact version; later changes invalidate draft downstream calculations or create adjustments for locked periods. Aggregate hours across branches for the same employer. Use elapsed instants for daylight saving and overnight calculations and effective dated policies for overtime and rounding.
+OPS 04 Leave
+Configure leave types, units, eligibility, holiday calendars, opening balances, accrual rules and approval routing. Request fields: employment, leave type, dates or hours, optional private reason and evidence. States: draft, pending, approved, rejected, cancellation_requested and cancelled. Validate overlaps and projected balance using agency work calendars. Negative balance is allowed only by an explicit policy.
+Approval locks the employee's relevant balance record, rechecks entitlement and creates a ledger entry. Approved cancellation reverses the entry, rather than deleting it. Leave affecting published visits creates a coverage action and notifications; it must not silently cancel client care. Approvers cannot approve their own requests. If no alternate approver exists, leave remains pending until a designated exception reviewer acts.
+OPS 05 Clients and care records
+Client records include agency specific identifier, service locations, contacts, authorized representatives, consent, risk alerts and service agreement. Care plan versions and tasks are linked to visits. Assigned caregivers see only necessary instructions; other agencies and recruiters cannot see clients. Submitted visit notes preserve author, submission time and amendments. Incident reports capture severity, occurred time, action and escalation owner, with acknowledgment and restricted access. Urgent emergencies follow the agency's emergency procedure; application notifications are not emergency response guarantees.
+OPS 06 Assets and expenses
+Assets contain tag, category, serial, condition, branch, custody and maintenance history. Assignments capture employment, handover, expected return, acknowledgement and condition. Lock the asset row when assigning or returning it; a physical asset has at most one current custodian. Return determines availability or maintenance. Lost equipment must not trigger automatic salary deductions.
+Expenses and mileage contain date, category, amount and currency or distance and unit, receipt, optional visit reference, reviewer and reimbursement status. States: draft, submitted, returned, approved, included_for_payment and reimbursed. One approved item can enter only one active finalized reimbursement instruction, whether through payroll or finance. Reimbursement requires actual payment evidence or authorized reconciliation, not mere approval.
+Acceptance: simultaneous shifts cannot overbook a caregiver within the agency; duplicate clock events are deduplicated; two leave approvals cannot spend the same remaining balance; the same asset cannot be concurrently handed to two staff; offboarding creates outstanding asset and coverage actions.
+10 Payroll invoicing and accounting
+FIN 01 Payroll export and later processing
+Initial payroll scope is validated export of approved, locked hours, authorized paid leave and approved reimbursable items into a selected provider format. Inputs include pay period, employee provider reference, earning codes and authorized effective dated rate information. Preview row errors and totals; missing identity mappings or unresolved work exceptions block export. Store export batch reference, source versions, rule versions and file checksum. Generating a file does not mark employees paid.
+Later provider processing states are draft, validated, reviewed, approved, exported_or_submitted, provider_accepted and paid, failed or uncertain. Preparation and final approval are separate permissions. Timeouts after submission require reconciliation before retry; retries use the original provider idempotency reference. Finalized pay is corrected through adjustments and reversals. Tax, statutory deductions, leave pay, minimum wage and reporting calculations require a validated jurisdiction implementation or appropriate provider; do not label estimates as compliant payroll.
+FIN 02 Billing and receivables
+Maintain client payer, effective dated agreement rates, service quantities, taxes, currency and terms. Approved service quantities generate draft invoice lines using charge rates separate from pay rates. Invoice states: draft, approved, issued, part_paid, paid or credited according to supported local rules; overdue is derived from due date and remaining balance. Issued invoices use credit notes rather than silent edits. Enforce unique agency invoice numbers and track invoiced quantities so retries cannot bill a visit twice.
+Receipts support partial allocation, refunds and reconciliation. Signed payment events cannot create duplicate receipts. Client payments and CareSys Agent subscription payments remain separate business ledgers. Invoice exports exclude care narrative and confidential recruitment history.
+FIN 03 Accounting boundary
+The first finance release supports expenses, invoices, receipts and documented accounting exports or provider integration. Each integration declares the source of truth, external mappings, retry rules and reconciliation. A native full ledger is a later controlled scope covering chart of accounts, opening balances, fiscal periods, balanced journals, accounts payable, tax and bank reconciliation. Posted journals must balance, be immutable and reverse through traceable entries. Financial statements cannot be described as complete until their posting coverage and opening balances are complete.
+Acceptance: unapproved work cannot enter a finalized export; a repeated submission cannot cause a second payment instruction; issued invoice history remains traceable; no unbalanced journal can post when a ledger is implemented.
+11 Functional interface and reporting catalog
+This catalog specifies required screens without producing new interface mockups. All screens need loading, empty, denied, invalid, stale version, expired session and unavailable service states. Safe input survives recoverable errors. Controls show pending and completed actions and prevent duplicate submissions. The responsive employee view prioritizes Today, Clock, Leave and Personal account. Accessibility target: WCAG 2.2 AA, with keyboard access, visible focus, labelled fields and meaningful status announcements.
+Screen group
+Required actions and information
+Personal home and profile
+Completion, discovery preview, regions, availability, qualifications, invitations and own history
+Privacy and disclosures
+Requests, category approval, decline, expiry, withdrawal and access activity
+Recruiter workspace
+Vacancy, purpose, authorized directory filters, shortlist, invitations and case stage
+Identity and history
+Restricted matching, confirmation progress, approved entry versions, source labels and disputes
+Offers and joining
+Versioned documents, decisions, each party's agreement, joining permission and pending conditions
+Agency employee record
+Employment episodes, own agency terms, qualifications, availability, documents and offboarding
+Daily operations
+Visit scheduling, uncovered work, clock controls, time corrections and approval queues
+Leave and assets
+Request and balance history, coverage impact, custody, return and outstanding items
+Payroll and finance
+Validations, approvals, export history, invoices, receipts and reconciliation exceptions
+Subscription and settings
+Features, limits, change preview, agency context, policies, roles and provider state
+Platform operations
+Verification, disputes, misuse reports, provider failures and approved support access
+
+Reports include recruiting funnel, stale candidate availability, check completion, disputes, offer conversion, employment starts, uncovered visits, time exceptions, leave usage, qualification expiry, asset custody, payroll input totals and receivables. Scope reports and exports exactly as their source records. Audit sensitive report access; no cross agency employee league tables or hidden reputation scores. Separate business analytics from operational logs and exclude sensitive narrative from analytics.
+12 CodeIgniter application responsibilities
+Use a modular monolith with CodeIgniter controllers, request validation, services, policies, repositories or scoped models, and views. Organize modules by Identity, Agencies, Subscriptions, Profiles, Recruitment, History, Employment, Operations and Finance. Controllers adapt HTTP requests; services own workflows and transaction boundaries. Do not place approval and disclosure rules only in views or model callbacks.
+Use explicit HTTP method routes and disable automatic routing. Apply authentication, tenant context, membership, permissions, entitlements and CSRF where appropriate through configured filters and policies. CodeIgniter documentation recommends disabling automatic routing when relying on route filters [T3]. Route filters establish coarse access; service policies recheck record and disclosure scope.
+Use CodeIgniter migrations and seeders for schema changes and synthetic examples. Use Query Builder or parameter binding; allowlist sort columns and never interpolate user supplied identifiers into SQL. Set allowed input fields explicitly. Responses use field projections so generic model serialization cannot leak birth dates, pay or private history.
+Proposed services include CandidateProfileService, CandidateSearchService, IdentityMatchService, HistoryDisclosureService, CareerDisputeService, ContractAgreementService, EmploymentActivationService, TimesheetApprovalService, LeaveApprovalService, AssetCustodyService and EntitlementService. Shared business methods support both web requests and background work with an explicit actor or service principal and authorization context. Jobs must not bypass policy merely because they run outside a controller.
+Use database backed session storage or another centrally revocable session store and secure cookie settings. A transactional outbox records notifications and provider work with the business transaction. Dedicated CLI commands executed by a scheduled runner process activation, expiry, notification and integration jobs. Durable MySQL backed jobs are acceptable initially; do not rely on a user's browser staying open. Logs use correlation references and omit credentials, birth dates and sensitive narratives.
+13 MySQL conventions and isolation
+Use InnoDB, utf8mb4, explicit foreign keys, strict SQL modes and schema migrations. Proposed internal keys are unsigned BIGINT, with unique opaque public references where records cross HTTP boundaries. Public IDs do not replace authorization. Use UTC DATETIME with fractional seconds for event timestamps and store the relevant IANA timezone separately. Birth dates are restricted identity values, not timestamps. Money uses DECIMAL with currency and rounding policy; durations use integer seconds. Avoid floating point currency.
+Agency owned tables contain agency_id and enforce tenant scope in every query, relationship, join, background job, search index, cache and file operation. Composite parent uniqueness on agency_id and id permits tenant aware foreign keys. For example, an assignment's agency_id and employment_id must reference an employment in the same agency. Add suitable indexes explicitly. MySQL foreign key constraints maintain the defined relationships [T4], but do not supply application row level access control.
+Personal and shared career tables do not pretend to belong to the requesting employer. They use person_id, contributor source and dedicated disclosure grants. Only HistoryDisclosureService can project shared history for an agency. A global people table is never directly joined into unrestricted tenant search results.
+Add created_at, updated_at and version to mutable records and retain actor references where meaningful. Use optimistic version checks for edits and InnoDB transactions with locked stable parent rows for competing workflows. Check transaction results and handle rollback explicitly. An overlap query alone is not a concurrency guard. Locking reads must be used within a correctly scoped transaction [T5]. Bound deadlock retries and make repeated requests idempotent. External network calls happen after commit through the outbox, not while holding database locks.
+Retire or version business records rather than cascading deletion through employment or finance history. A data retention job applies category specific retention and legal holds after policy approval; soft deletion alone is not a complete privacy or retention process.
+14 Logical database dictionary
+This is the logical schema for developer elaboration through migrations, not a complete SQL script. All IDs reference their named parent records unless stated otherwise. Agency private relations use tenant aware constraints. Detailed accounting and statutory payroll structures remain part of their later validated scope.
+Identity and agencies
+Table group
+Principal fields and rules
+Shield identity tables
+Package managed users, login identities, credentials and sessions; extend using supported migrations rather than duplicating password storage
+persons
+id, public_ref, user_id unique when linked, legal_name, preferred_name, identity_status, account status; an employer created placeholder remains unclaimed until identity resolution
+person_private_identity
+person_id unique, encrypted birth date and other justified identity fields, key reference, matching token where enabled; not part of directory responses
+agencies and branches
+Agency legal identity, verification status, country, currency and timezone; branches belong to one agency
+agency_memberships
+agency_id, user_id, status, access dates; unique agency_id plus user_id; membership can carry multiple roles
+membership_roles and branch_scopes
+Membership to role and permitted branches; role permissions stored explicitly; no platform wide agency role inheritance
+agency_verifications and invitations
+Evidence references, reviewer, outcome; invitation token hash, intended recipient, role scope, expiry and consumed time
+
+Profiles recruitment and career history
+Table group
+Principal fields and rules
+candidate_profiles
+person_id unique, summary, visibility, job_seeking_status, publication version and availability_confirmed_at
+candidate_regions and geography
+person_id, controlled region reference, preference priority, travel radius and unit; allow multiple areas without exposing private address
+candidate_preferences and availability
+Engagement and shift preferences, desired hours, start date, relocation, pay range and currency; availability windows have timezone
+qualifications and qualification_evidence
+person_id, issuer, type, dates, verification state and evidence; agency acceptance stored separately from personal ownership
+vacancies and applications
+agency_id, vacancy role and location; application person_id, status, stage version and outcome; avoid duplicate active application to the same vacancy
+recruitment_events and identity_requests
+Agency, case, actor, purpose, matching workflow status, candidate confirmation and attempt metadata; minimize retained lookup inputs
+career_entries and career_entry_versions
+Person, source employer, role, date values and precision, engagement, immutable version, source, verification evidence and correction linkage
+history_requests and disclosure_grants
+Person, requesting agency, purpose, case, category scope, allowed recipients, requested or approved status, valid dates and authorization evidence
+grant_entry_versions and grant_scopes
+Explicit approved entry versions and categories; child rows make scope inspectable and enforceable
+reference_requests and responses
+Candidate, requesting agency, referee contact reference, authorization, confirmed source, outcome and restricted response
+career_disputes and dispute_events
+Entry version, claimant, evidence, assigned reviewer, status, decision, appeal and correction linkage
+disclosure_access_events
+Grant, entry version, agency, viewer, action and timestamp; record permitted exports and denied misuse without storing narrative copies in logs
+
+Contracts employment and operations
+Table group
+Principal fields and rules
+offers and contract_versions
+Agency, person, case, terms, status; contract version, immutable document reference and digest
+contract_acceptances
+Contract version, party and capacity, decision, authentication evidence and accepted_at; prevent duplicate final acceptance for the same party and version
+joining_requests and joining_conditions
+Agency, person, contract version, individual authorization, conditions, start date, status and withdrawal; distinct from history grants
+employments
+Agency, person, employee number, episode dates, status and source_joining_request_id unique; preserve rehire as another episode
+employment_terms and branch_assignments
+Effective dated role, pay basis, supervisor and branches with no contradictory overlapping terms
+agency_employee_private
+Employment, restricted HR fields and agency documents; never used as a shared history payload
+clients and service_agreements
+Agency client ID, contacts, locations, consent, payer, service rates and agreement versions
+care_plan_versions and visit_notes
+Client, effective care instructions; submitted note version, assignment, author and amendment link
+shift_series and visits
+Agency, branch, client, service, timezone, planned instants and occurrence status
+visit_assignments and scheduling_locks
+Agency, employment, visit and assignment state; a stable lock row per employment supports concurrent overlap checks
+clock_events and work_sessions
+Employment, assignment, event type, occurrence and receipt times, event reference unique within agency, correction link; current session tracked under a stable employment lock
+timesheets and timesheet_versions
+Employment, pay period, version, totals, approval state, approver and locked source references
+leave_policies requests and ledger
+Effective policy, employment, unit, leave dates, status and immutable balance postings; unique approval posting per request action
+assets custody and maintenance
+Asset tag unique within agency, condition, status, current_assignment_id and version; custody history retains each handover and return
+expenses and reimbursement_items
+Employment, amount or mileage, receipt, approval and payment instruction; prevent duplicate finalized reimbursement
+incidents and escalation_events
+Agency client or employment, restricted severity and narrative, owner, acknowledgements and actions
+
+Commercial finance and infrastructure
+Table group
+Principal fields and rules
+plan_versions modules and features
+Versioned catalog, limits, dependencies and effective dates
+subscriptions and agency_entitlements
+Agency, provider reference, paid term, state and effective feature grants; retain prior versions
+provider_events and billing_records
+Provider name and event_id unique, verified receipt state, processing result and separate platform subscription invoice references
+payroll_batches and payroll_lines
+Agency, period, source versions, earning mappings, review, export checksum and reconciliation; immutable finalized snapshots
+invoices lines credit_notes and allocations
+Agency numbering, agreement rate snapshots, service quantity allocation, receipts and corrections
+accounting_exports and mappings
+Provider, external reference, source record, batch, sync state and reconciliation; no implied complete native ledger
+documents and document_access
+Scope classification, agency or person owner, private storage key, digest, type, scan status, retention and authorization policy
+audit_events
+Actor, scope, action, record reference, request correlation and timestamp; append only through permitted application operations
+outbox jobs and notifications
+Committed business reference, deduplication key, attempts, lease, next retry and delivery state
+idempotency_records
+Actor scope, operation, client key unique, request digest, outcome reference and expiry; reject reuse with different content
+retention_holds and support_access
+Protected record category, hold reason or approved support purpose, approver, expiry and access events
+
+Required integrity and index decisions
+Index agency scoped lists by agency_id, status and relevant date; career history by person_id and source; grants by agency_id, person_id, status and validity; recruitment profiles by visibility and searchable region relations. Test actual query plans using representative data. Do not implement every field as a JSON object; normalized relations are required for permissions, memberships, preferences, versions and scopes. JSON may hold bounded provider metadata that is validated and not relied upon as the sole integrity mechanism.
+Identity matching must not use a plain hash of birth date: the input space is easily guessed. If exact server side matching is approved, use encrypted identity values plus a purpose limited keyed matching token, restricted service access, key management and rotation. Do not make name and birth date a unique key; different people can share them. Evaluate residual matching and enumeration risks before enabling the feature.
+Unique source_joining_request_id prevents duplicate employment activation. Lock the asset and use its current_assignment_id as the authoritative custody pointer, rather than assuming a nullable return date unique index prevents multiple open assignments. Leave approval uses a unique posting key and a locked balance aggregate. Visit billing uses source quantity allocation records rather than a simple billed boolean when partial invoicing is supported.
+15 HTTP functional contracts and validation
+Routes below are proposed logical contracts under /api/v1; server rendered CodeIgniter forms may call the same services. Personal routes derive person identity from the authenticated account. Agency routes resolve the public agency reference through current membership and never trust a posted agency_id as authorization.
+Route group
+Operations and key rules
+/me/profile and /me/preferences
+GET and PATCH own allowed fields; version check on edits; POST visibility change with affirmative preview confirmation
+/agencies/{agency}/candidates
+GET paged approved summaries; allowed filters only; no birth date or hidden profile data
+/agencies/{agency}/identity-requests
+POST restricted matching or invitation; purpose required; neutral response before candidate confirmation
+/agencies/{agency}/history-requests
+POST request; GET permitted request states; no implied grant from request creation
+/me/history-requests/{request}/decision
+POST approve selected categories or decline; authenticated intended person only
+/me/disclosure-grants/{grant}/withdraw
+POST withdrawal; repeated withdrawal is safe; audit outcome
+/agencies/{agency}/history-requests/{request}/entries
+GET grant limited entry projection; recheck expiry and recipients on each read
+/me/career-entries and /me/disputes
+POST or PATCH own declarations and disputes; source confirmed facts use correction workflow
+/agencies/{agency}/offers and /contracts
+Create or issue versions; accepting a contract uses a separate party authorized action
+/me/joining-requests/{request}/decision
+POST explicit joining authorization or refusal; no agency impersonation of the person
+/agencies/{agency}/employments/activate
+POST request reference and idempotency key; all activation conditions rechecked atomically
+/agencies/{agency}/visits and /clock-events
+Scoped planning and immutable time submission; conflicts validated under lock
+/agencies/{agency}/timesheets/{sheet}/approve
+POST displayed version and reason where needed; no self approval
+/agencies/{agency}/leave-requests
+Submit, approve, reject and request cancellation through distinct actions
+/agencies/{agency}/assets/{asset}/assign
+POST handover to eligible own agency employment; custody transaction required
+/agencies/{agency}/payroll-exports and /invoices
+Validate, preview and authorized finalize actions; immutable source snapshot
+/agencies/{agency}/subscription/change-preview
+POST selection; purchase confirmation is a separate action and provider state
+
+Mutations validate field types, lengths, requiredness, reference scope, enum values, date ordering, state and concurrency version. Never accept user controlled verification flags, pay approval status or entitlement values through a general edit endpoint. Unknown sensitive fields are rejected rather than silently mass assigned.
+Use 401 for expired or missing authentication, 403 for known denied actions where safe, 404 for unavailable or cross scope objects, 409 for state or version conflicts, 422 for field validation and 429 for rate limiting. Responses include stable code, readable message, field errors where applicable and correlation reference. Successful creation returns a reference and current state, not unrelated private data. Idempotency records bind user or service scope, operation, key and request digest; a reused key with different payload fails.
+16 Background work documents and integrations
+Activation and expiry jobs run at a configured short interval and catch up after outages. A failed runner leaves work visibly pending. Claim jobs with bounded leases and retry counts; a crashed worker must not duplicate a committed result. Process notifications, checks, subscription events and provider callbacks through durable jobs with deduplication and a failed work queue for operator reconciliation.
+Provider adapters cover email, subscription billing and later signing, payroll, accounting and permitted checks. Verify signatures or trusted authentication, record unique external events, tolerate duplicates and reordered callbacks, and fetch authoritative provider state where necessary. Separate provider accepted from paid or legally verified outcomes. No provider secret enters source control or client responses.
+Uploaded documents have size and type allowlists, malware scanning and quarantine until accepted. Store binaries outside the public web root or in private object storage; MySQL stores metadata and private storage references. Check scope and purpose before each download. Document access must not be authorized solely by knowing its storage path. Notifications link to authenticated content and omit health, birth date, financial and adverse reference details.
+Imports provide templates, dry run, duplicate checks, row errors and an authorized commit. Imported history remains self declared or imported until its source is confirmed. Imported employee rows do not bypass joining authorization; any migration of an existing workforce requires a documented claim and notification policy before enabling accounts. Exports apply field and record permissions and escape CSV cells that could be interpreted as spreadsheet formulas.
+17 Security and operational acceptance
+SEC 01: Enforce TLS, secure cookies, CSRF protection for browser session mutations, output escaping and parameterized database access. Revoke affected agency sessions or permissions promptly when membership ends. A password reset or global suspension invalidates the relevant authentication sessions. Require deliberate limited support access and audit sensitive reads and exports as well as changes.
+SEC 02: Establish launch jurisdiction, lawful processing responsibilities, sharing notices, contract signing method, retention periods, deletion exceptions and complaints procedures before live recruiting and history checking. Candidate authorization is a product control and does not by itself resolve all privacy obligations. Country dependent sensitive checking remains disabled until approved. Care data is never included in recruitment history.
+SEC 03: Use separate development, staging and production configuration, private database networking, least privilege database credentials and managed secrets. Production exposes the CodeIgniter public directory only. Disable development debugging and keep writable storage outside publicly served paths. Scheduled jobs and backup operators use restricted service identities. Keep application and dependency versions locked and patch through a tested release process.
+SEC 04: Maintain encrypted backups, restore exercises, monitoring, alerts, job failure dashboards and an incident procedure. Migrations must support tested deployment sequencing and recovery; do not assume MySQL schema changes roll back like ordinary business transactions. Use synthetic records outside production and never duplicate real sensitive data into demonstrations without an approved process.
+Proposed pilot targets, requiring owner agreement: monthly availability at least 99.5 percent; common interactive requests within 2 seconds at the 95th percentile under an agreed test of 50 agencies and 100 concurrent users; recovery point within 24 hours; recovery time within 8 hours. Search data volume must be included in the load test, proposed initially at 10,000 candidate profiles. Targets are acceptance goals, not claims of measured performance.
+18 Acceptance and test matrix
+Automated authorization, integration and concurrency tests must run against MySQL as well as ordinary service tests. An in memory substitute cannot establish MySQL locking, collation or foreign key behaviour. Browser tests cover critical journeys and accessibility. Each module's happy path is insufficient without denial, stale state and repeated request cases.
+Test
+Required result
+AT 01 Personal independence
+A verified person with no employer maintains a profile and preferences without an agency subscription
+AT 02 Visibility
+Publishing exposes only previewed fields; pause removes subsequent directory access
+AT 03 Geographic matching
+Multiple preferred regions, radius units and stale availability behave as specified
+AT 04 Agency eligibility
+Unverified or unentitled agencies cannot search through UI, API or exports
+AT 05 Identity confidentiality
+Name and birth date request exposes no private account existence or history before confirmation
+AT 06 Ambiguous identity
+Identical name and birth date cases do not merge people or join the wrong employee
+AT 07 Authorized history
+Agency B reads only candidate approved entry versions from Agency A and permitted external entries
+AT 08 Withdrawal
+Next protected read and download fail after grant withdrawal or expiry; already downloaded copy limitation is explained
+AT 09 Attribution and dispute
+Self declared, source confirmed, corrected and disputed facts remain distinguishable
+AT 10 Confidentiality
+Salary, discipline, medical evidence and client details never appear in recruitment projections
+AT 11 Contract agreement
+Both parties accept the same final version; changed terms invalidate readiness
+AT 12 Joining control
+Search, invitation and unilateral employer action cannot create active employment
+AT 13 Future activation
+Before start date employment stays pending; job catch up activates once after all conditions pass
+AT 14 Withdrawal race
+Concurrent candidate withdrawal and activation yield one consistent outcome with traceable order
+AT 15 Previous employment
+New joining preserves former records and does not terminate another relationship
+AT 16 Employment retry
+Two simultaneous activation requests yield one employment episode and no duplicated billing usage
+AT 17 Agency isolation
+Guessed references fail across lists, joins, files, caches, exports and jobs
+AT 18 Workspace change
+Stale agency form cannot write into a newly selected workspace
+AT 19 Scheduling
+Concurrent overlapping assignments are blocked using the common employee scheduling lock
+AT 20 Actual time
+Overnight and daylight saving cases use actual elapsed time; duplicates do not create additional work
+AT 21 Leave
+Competing approvals do not overspend balances; approved cancellation reverses its posting
+AT 22 Asset custody
+Concurrent handovers yield one active custodian; returns preserve history
+AT 23 Payroll
+Missing provider references or unapproved hours block export; uncertain submission reconciles before retry
+AT 24 Finance
+Retried visit billing cannot duplicate quantities; issued invoices retain source and correction history
+AT 25 Subscription
+Duplicate or reordered callbacks give correct current access; upgraded plan never overrides privacy
+AT 26 Offboarding
+Operational access ends while personal account and permitted history remain available
+AT 27 Recovery and accessibility
+Restore meets agreed targets; keyboard only users can complete profile, disclosure and joining journeys
+
+19 Business requirement traceability
+Business requirements
+Functional coverage
+BR 01 to BR 05
+FND 05, PRO 01, PRO 02, HIS 01; independent registration and source labelled history
+BR 06 to BR 11
+FND 01, FND 06, REC 01 to REC 03; verified search, matching and private invitations
+BR 12 to BR 18
+HIS 01, HIS 03, HIS 04, EMP 04; cross agency history, source, dispute and retention
+BR 19 to BR 23
+HIS 02 to HIS 04; granular authorization, withdrawal and disclosure audit
+BR 24 to BR 27
+REC 04, EMP 01; recruitment stages, offer and versioned mutual contract agreement
+BR 28 to BR 35
+EMP 02 to EMP 04; explicit joining, pending start, prior work and concurrent offers
+BR 36 to BR 40
+SUB 01, SUB 02, FND 05; modular purchase, seats and personal rights
+BR 41 and BR 42
+FND 06, REC 01, SEC 01; agency verification, purpose and designated recruiters
+BR 43 to BR 47
+HIS 03, HIS 04, REC 02, SEC 02, OPS 05; disputes, fair checks and care confidentiality
+BRD agency module scope
+OPS 01 to OPS 06, FIN 01 to FIN 03 and reporting catalog
+BA 01 to BA 18
+AT 01 to AT 18, AT 25 and AT 26, with workflow acceptance statements above
+
+20 Delivery and Codex handoff
+Release A order: identity and scopes; agency verification and entitlements; personal profiles; search and invitations; career records and disclosures; disputes; applications, contracts and activation. Subscriptions may use sandbox provider events during development, but no simulated payment may unlock production access as if paid. Demonstrate with at least two fictional agencies, an unemployed candidate, a former employee and a person with an unresolved identity case.
+Release B adds own agency people management, clients, scheduling, attendance, leave, assets, expenses and payroll export. Release C delivers invoicing, selected provider integrations and validated advanced functionality. Core authorization and data separation apply from the first increment; do not defer them until after feature development.
+For each increment, Codex must provide migrations, seed data, working forms and service methods, applicable permissions, validation and automated acceptance tests. Produce requirement to test links and a demonstration that requires no direct database editing. Keep provider dependent actions visibly pending when credentials or confirmations are missing. Do not represent a local prototype or message only button as completed business functionality.
+Handoff includes Composer dependencies and lockfile, environment template without secrets, setup commands, MySQL migration and recovery instructions, job schedule, storage configuration, mail and provider setup, test commands and deployment runbook. Actual hosting accounts, credentials, domain and paid services depend on owner choices. The present task produces this specification and does not deploy the application.
+21 Unresolved decisions and proposed safe defaults
+Decision
+Proposed interim treatment
+Launch country and care scope
+Configurable; no statutory or sensitive check feature enabled before local validation
+Framework generation
+CodeIgniter 4 proposed; confirm if an existing CodeIgniter 3 application must be reused
+Employed candidate discovery
+Personal accounts retained; broad discovery for currently employed candidates disabled pending policy
+Multiple active employments
+Schema preserves episodes and overlaps; uncertain activation requires review rather than ending other employment
+Name and birth date permission
+Restricted matching disabled per jurisdiction until approved; invitations remain available
+Identity and agency verification
+Defined provider or manual evidence policy required before live protected checks
+History fields and retention
+Minimum career summary; no adverse or sensitive fields in general disclosure; approve duration and legal hold policy
+Contract and signing method
+Version specific recorded agreement; validate signing provider and legal sufficiency before launch
+Subscription costs and lapse
+Versioned catalog; no invented prices or auto termination of agreed contracts
+Payroll accounting and payments
+Export and sandbox adapters first; validated provider and country rules before real processing
+Hosting and availability
+Region, budget, recovery targets and operators confirmed before production
+
+22 Technical reference sources
+Consulted 23 October 2026. These references support framework and database choices; the specific business workflows and schema in this document are proposed application design, not behaviours supplied automatically by CodeIgniter or MySQL.
+[T1] CodeIgniter server requirements: https://codeigniter.com/user_guide/intro/requirements.html
+[T2] CodeIgniter Shield official authentication and authorization package: https://shield.codeigniter.com/
+[T3] CodeIgniter controller filters and routing guidance: https://codeigniter.com/user_guide/incoming/filters.html
+[T4] MySQL 8.4 foreign key constraints: https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html
+[T5] MySQL 8.4 locking reads: https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html

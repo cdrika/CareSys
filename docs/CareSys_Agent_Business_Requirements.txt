@@ -1,0 +1,236 @@
+CareSys Agent
+Business requirements document
+Version 1.1 | 23 October 2026 | Status: proposed business baseline for owner review
+1 Business purpose
+CareSys Agent will be an online business platform for caregiving agencies, especially small companies. Agencies will choose the business modules they require and subscribe to a service level that provides appropriate features. The platform will also give individual caregivers a personal profile that continues to exist before, during and after employment with an agency.
+The product brings together two connected business needs: running a caregiving agency and finding, checking and engaging suitable workers. Employers will be able to recruit through a shared caregiver directory, request authorized employment history from other agencies and establish a new employment relationship after both parties agree to the contract.
+This document describes business outcomes, scope, rules and acceptance conditions. It supersedes the earlier functional specification as the business baseline for discussion. Earlier interface and implementation materials are not updated by this revision and must not override these requirements. Interface design, technology choices and development instructions are outside this document's scope.
+2 Business objectives
+Give small agencies one place to manage recruitment, staff, caregiving operations, assets and financial administration.
+Allow agencies to buy the modules they need and expand as their business grows.
+Help people who are not employed by an agency register their experience, qualifications, availability and work preferences.
+Help employers find candidates who match their service locations and staffing requirements.
+Give authorized recruiters access to relevant, traceable employment history, including work for other companies.
+Require an employee's authorization and mutual contract agreement before linking that person to a new agency as an employee.
+Preserve accurate employment history when a person changes agencies while protecting confidential employer, employee and client information.
+Reduce duplicate data entry, scheduling gaps, administrative delays and payroll preparation errors.
+3 Scope
+Included business capabilities
+Agency registration and subscriptions; independent caregiver registration; candidate directory and search; identity matching; employment history and references; recruitment and offers; contract agreement and agency joining; employee records; time and attendance; leave; scheduling; client and care operations; employee assets; expenses; payroll; billing and accounting; reports and administration.
+Excluded from the current business baseline
+Detailed screens, software architecture, database design, hosting vendor selection, approved prices and country specific calculation rules. CareSys Agent will be hosted online, but its hosting arrangements are a later implementation decision. Clinical decision support, medication prescribing, guaranteed background clearance and automatic hiring decisions are not included.
+The platform can show only history recorded in CareSys Agent or supplied through authorized references, documents or connected services. It cannot promise a complete history of every person or unrestricted access to external employer systems.
+4 Stakeholders
+Stakeholder
+Business responsibilities
+Platform owner
+Product policy, commercial packages, agency verification, support and platform governance
+Agency owner or administrator
+Agency registration, purchased modules, staff access and agency policies
+Recruiter or HR officer
+Candidate search, authorized checks, offers, contracts and onboarding
+Independent caregiver or applicant
+Personal profile, preferences, applications, disclosure permissions and offer decisions
+Agency employee
+Work records, attendance, leave, assigned assets and personal employment information
+Scheduler or supervisor
+Staff availability, assignments, coverage, visit review and approvals
+Payroll or finance officer
+Approved payroll inputs, employee expenses, billing and accounting
+Client or authorized representative
+Care services and, if enabled later, specifically shared records
+
+One person may hold more than one role. A person owns their personal account; an agency controls its business records. Neither account ownership nor a paid subscription permits unrestricted access to another party's information.
+5 Core business concepts
+Personal account and agency employment
+A caregiver has one continuing personal identity on CareSys Agent, with separate employment relationships for each agency they join. Leaving an agency does not delete that personal account or transfer ownership of historical records to the next employer.
+The platform distinguishes account status, job seeking preference, recruitment stage and employment status. For example, a person may have an active personal account, be available for work, have two applications in progress and have no current agency employment. These must not be treated as a single status.
+Three categories of information
+Personal profile information includes the caregiver's own contact details, experience summary, qualifications and preferences. Shareable career history includes permitted employment dates, roles, verified qualifications and authorized references. Agency private records include payroll details, internal HR files, disciplinary files, client records and confidential operational information.
+A new employer's ability to check history comes from the shareable career record and approved disclosure process. It does not provide general access to a former employer's internal files. Sensitive checks, such as criminal record or health related checks, require a separate permitted process for the operating jurisdiction.
+6 Independent caregiver registration
+BR 01: A person who is not currently employed by any agency must be able to register and use a personal account without an employer creating it. An agency subscription must not be required merely to maintain that personal account. Whether optional applicant services carry a fee remains a commercial decision; no such fee is approved by this document.
+BR 02: The caregiver must be able to create and update their profile, save it before completion and choose when to make it discoverable to verified recruiting agencies. Registration and discoverability are separate actions.
+BR 03: The profile must support the following information, with mandatory fields determined by the stage of recruitment rather than collecting every detail immediately.
+Information group
+Business information supported
+Identity and contact
+Legal name, preferred name, contact details and restricted date of birth for permitted identity matching
+Professional summary
+Caregiving experience, role interests, languages relevant to care and skills
+Qualifications
+Certificates, issuing organization, expiry, supporting evidence and verification status
+Employment experience
+Employer, position, dates, duties, evidence and reference contacts where authorized
+Geography
+Preferred towns, regions or postal areas; travel radius; relocation willingness; transport availability
+Work preferences
+Full time, part time, casual or contract interest; day, night, weekend or live in work; preferred hours and start date
+Care preferences
+Service settings, client support experience and task preferences relevant to the role
+Commercial preferences
+Expected pay range and currency, where the caregiver chooses to provide them
+Availability
+Available days and hours, notice period, open to work and temporarily unavailable settings
+
+Exact residential address, full date of birth, identity documents, bank details and sensitive personal information must not appear in general search results. Work preferences are indications of interest, not promises that override a later contract.
+BR 04: A caregiver must be able to pause discovery, withdraw an application and update preferences without losing their account. Proposed default: acceptance of employment prompts them to review availability rather than automatically deleting their profile or announcing their employment publicly.
+BR 05: Caregivers may record work performed outside CareSys Agent. Such entries must be visibly distinguished as self declared, supported by documents, employer confirmed or verified through an authorized check. The platform must not describe self declared history as independently verified.
+Acceptance: an unemployed caregiver can register, choose two preferred regions and weekend availability, publish an eligible profile and later pause its discoverability without agency assistance.
+7 Employer recruitment search
+BR 06: An authorized recruiter from a verified agency with the appropriate recruitment entitlement must be able to search the discoverable candidate directory. Verification and access controls apply even if the agency has paid for the module.
+BR 07: Search must support candidate name and work related filters such as geographic preference, availability, role interest, qualifications, experience and employment type. Results must distinguish candidates with no current agency relationship from people who are currently employed but choose to be open to opportunities, if the latter is enabled by platform policy.
+BR 08: An employer must be able to locate a person using name and date of birth for a permitted recruiting identity check. Date of birth is a restricted matching input, not a public directory field or a filter for ranking applicants by age. Where local recruitment rules restrict its use, the agency must use a permitted alternative such as a candidate invitation, profile reference or candidate initiated sharing link.
+BR 09: A match on name and date of birth must not by itself establish identity or disclose employment history. The recruiter must confirm the correct person through candidate account authorization or another approved identity confirmation process. Similar names, incomplete dates and duplicate profiles must have a resolution route. Matching must never automatically merge records or create employment.
+BR 10: The employer must be able to invite a known candidate who is not publicly discoverable. The candidate receives the request through an existing account or secure invitation and chooses whether to respond. The request process must not reveal a private profile or its history to the requester before authorized disclosure. People with no platform account can be invited to register; the system cannot supply nonexistent history.
+BR 11: General results show only the candidate's approved recruitment summary, relevant preferences, qualification indicators and an invitation or contact action. Availability must include when it was last confirmed. A person must not be labelled unemployed solely because CareSys Agent has no current employment record for them.
+Acceptance: a recruiter can find an opted in candidate by name and preferred region. A name and date of birth check can initiate identity confirmation but cannot expose a hidden profile, full birth date or private history.
+8 Employment history across agencies
+BR 12: A recruiting employer must be able to request and, once authorized, view the relevant career history of a person who has never worked for that employer. This must include permitted records from other agencies and distinguish records by source.
+BR 13: Shareable employment entries must support employer name, position, service category, employment dates, type of engagement, relevant responsibilities and confirmation status. Employment dates must allow uncertainty or incomplete historical information rather than forcing fabricated dates.
+BR 14: Professional qualifications, training and references may accompany the history where disclosure is authorized. Performance references, reasons for leaving and adverse findings are not general directory fields; each requires an approved disclosure policy, relevant purpose and appropriate review. No shared employee blacklist or unreviewed reputation score is included.
+BR 15: Each entry must identify who supplied it, what was checked, when confirmation occurred and whether it is self declared, confirmed, disputed, corrected or no longer current. An employment confirmation is not a guarantee of suitability, current credential validity or a completed statutory background check.
+BR 16: The caregiver must be able to view their career history and request corrections or dispute an entry. An employer may confirm or correct its own contributed facts, but cannot edit another employer's entry. Disputes must retain provenance, identify the disputed information and provide a fair review route; disputed information must not be silently presented as verified fact.
+BR 17: Agencies must not browse another agency's payroll, salaries, banking, medical evidence, disciplinary files, client identities, care notes or internal attachments through a career history check. A lawful, specifically approved disclosure outside the ordinary career summary follows a separate restricted process.
+BR 18: History must remain available for authorized future checking after a person changes agencies, subject to applicable retention, correction and disclosure rules. Ending employment or a subscription must not let a former agency erase the person's entire career record. Conversely, the platform must not retain or expose every record indefinitely merely because it was once submitted.
+Acceptance: Agency B can see a candidate's authorized employment dates and role from Agency A, including the entry's confirmation status. Agency B cannot see Agency A's payroll, internal HR case or client records.
+9 Candidate authorization and disclosure
+BR 19: Before restricted career information is shared, the caregiver must be shown the requesting agency, purpose, requested information categories, intended recipients and access duration. They must be able to approve or decline. Refusing a disclosure must not authorize an employer to obtain the same information through another module.
+BR 20: Authorizations must be recorded separately for directory visibility, contact, career history review, reference checks, sensitive checks and joining an agency. Agreement to a job contract is not blanket permission for unrestricted access to all historic information.
+BR 21: The person must be able to see active sharing permissions and withdraw future access where applicable. Withdrawal or expiry stops future viewing under that authorization. It does not promise deletion of records an employer must lawfully retain from a completed recruitment process. Copies, exports and retention periods must be explained before disclosure and governed by policy.
+BR 22: A history request must have a business status: requested, approved, declined, withdrawn or expired. Access expires after the approved period; a continuing need requires renewal or another valid documented basis. Employers must be told when a request cannot be completed rather than receiving invented or incomplete checks labelled complete.
+BR 23: The platform must keep a traceable record of recruitment searches, requests, disclosures, history exports, corrections, disputes and agency joining approvals. The candidate must have access to meaningful disclosure history, subject to legitimate restrictions defined for the operating jurisdiction.
+Candidate authorization is a required product control. The applicable lawful basis for processing, employer obligations and any required notices or agreements must also be established for the launch country; an authorization checkbox alone does not settle every privacy obligation.
+10 Recruitment offers and contracts
+BR 24: Agencies must be able to record a vacancy or staffing need, shortlist candidates, invite applications, arrange interviews, request permitted checks and record an outcome. Applicants must be able to apply or respond to an invitation without joining that agency as an employee first.
+BR 25: Recruitment stages must include invited or applied, under review, interview, checks pending, offer issued, offer accepted, contract agreed, onboarding and employed. Declined, withdrawn, unsuccessful, cancelled and expired outcomes must also be recorded. An accepted offer is not automatically proof that all contract and joining conditions have been met.
+BR 26: The employer must issue an offer and contract identifying the agency, person, role, work location or area, employment type, pay basis, intended start date, hours or availability terms, conditions and relevant policies. Country specific contract requirements remain subject to the operating jurisdiction.
+BR 27: Both parties must agree to the same final contract version through an approved signing or recorded acceptance process. A change to material terms after either party accepts requires renewed acceptance. The record must identify the version, parties and agreement dates. The signing method must meet the business and legal needs of the chosen market.
+Acceptance: the candidate can review an offer, decline it or agree to its final terms. The agency cannot treat agreement to an earlier contract version as agreement to subsequently changed pay or conditions.
+11 Joining an agency and changing employers
+BR 28: An agency must be able to initiate a request to bring a person under its agency after hiring. The person must explicitly authorize the employment link, both parties must have agreed to the final contract, and any required joining conditions must be satisfied before the relationship becomes active.
+BR 29: A recruiter finding a person, viewing history, sending an invitation or recording an offer must never by itself move that person under the agency. An employer cannot unilaterally claim a candidate's account.
+BR 30: Where the start date is in the future, the relationship is recorded as accepted or pending start until that date and the applicable activation conditions are met. Onboarding permissions may be granted separately without allowing operational client access prematurely.
+BR 31: Once active, the person appears in the new agency's employee list and receives the access appropriate to their role. The personal account and permitted career history continue; the new agency creates and controls its own employment records.
+BR 32: Changing employers creates a new employment relationship. It does not move the previous employer's payroll, leave balances, assets, clients or private records to the new employer. Any recognized service, transferred entitlement or document sharing must be explicitly agreed and permitted.
+BR 33: The previous agency relationship must be closed through its own employment ending process using the actual end date. The new employer cannot edit or close it. Previous employer approval is not an assumed requirement for a worker to accept another offer; contractual notice and other applicable obligations must be handled under the relevant rules.
+BR 34: The platform must support recording overlapping employment relationships where permitted. Whether to allow active work for several agencies, display an overlap warning or require additional declarations is an owner policy decision. Until decided, the system must not automatically terminate an existing relationship to make room for a new one.
+BR 35: If two agencies make offers, accepting one must not silently accept, reject or transfer the other. The individual must decide how to handle each offer. An offer withdrawn before activation must not leave the candidate incorrectly listed as an active employee.
+Acceptance: Agency B issues a contract; the person and Agency B agree to the same version; the person authorizes joining; the relationship activates on the agreed start date after required conditions are met. Agency A's historical records remain separate and its current relationship is not silently terminated.
+12 Agency business management modules
+The recruitment additions expand the original product scope. The following agency management requirements remain part of CareSys Agent, with delivery order to be agreed later.
+Area
+Business requirement
+Agency administration
+Register company details, branches, users, delegated responsibilities and business policies
+Employee management
+Maintain employment details, qualifications, documents, availability, onboarding, employment changes and offboarding
+Time and attendance
+Record actual time in and out, breaks, travel, corrections, exceptions and approved timesheets
+Leave
+Submit requests, check entitlement and coverage, obtain approval, handle cancellations and preserve balances
+Scheduling
+Allocate qualified available caregivers to clients, detect conflicts and manage uncovered or cancelled shifts
+Care operations
+Maintain authorized client details, service instructions, visit completion, notes and incident escalation
+Assets
+Register equipment, assign custody to employees, acknowledge handover, record condition, return and maintenance
+Expenses
+Submit, review, approve and track reimbursement of expenses and mileage
+Payroll
+Prepare approved work and leave for payroll, review results and support validated country appropriate processing or integration
+Client billing
+Apply agreed service rates, create invoices, record receipts and manage overdue balances
+Accounting
+Support expenses, financial exports and integrations; offer full accounting only when complete business controls are defined
+Reporting
+Provide staffing, recruitment, service, attendance, leave, asset and financial reports within authorized scope
+
+Each agency's own employee records remain available to its authorized staff even when the employee has not opted into the shared recruitment directory. These internal records do not become searchable by other employers automatically.
+13 Subscriptions and commercial rules
+BR 36: Agencies must be able to select modules and a subscription level. The service must explain included functions, advanced features, limits, dependencies, fees and renewal conditions before purchase. Final prices are not set in this document.
+BR 37: Recruitment and authorized career history checking may be separately packaged. Purchasing either module does not override candidate authorization, identity checks or disclosure restrictions. Higher subscription levels must not purchase broader rights to private employee records.
+BR 38: The platform must distinguish an individual candidate account from an agency's paid employee seats. A profile appearing in search must not automatically create a billable employee seat. Treatment of recruiters, contractors, inactive employees and workers with multiple agency relationships must be defined before charging.
+BR 39: Upgrades, downgrades, trial expiry, payment failure and cancellation must have clear business consequences. An agency cancelling recruitment access loses new search and check capabilities according to its paid term; retention of already held recruitment and employment records follows the approved policy and applicable obligations.
+BR 40: Basic privacy choices, correction requests and required personal record access must not depend on a person's former employer maintaining a premium subscription. Legal retention and permitted exports must be addressed explicitly when an agency leaves the platform.
+14 Governance and trust requirements
+BR 41: Agencies must be verified before they can recruit or request sensitive information. Verification establishes eligibility to use the service, not that every vacancy or statement is guaranteed. There must be a process for investigating fraudulent agencies, impersonation and misuse of search.
+BR 42: Only designated recruiting staff may search or request career checks. Access must be linked to a genuine recruiting purpose. Bulk harvesting, unauthorized resale and sharing outside permitted recipients are prohibited business uses.
+BR 43: The platform must provide reporting and review routes for inaccurate references, disputed employment dates, duplicate identities, unauthorized disclosures and recruitment abuse. A worker must be able to challenge adverse information without their personal account being controlled by the employer they are disputing.
+BR 44: Recruitment criteria must be job relevant. Date of birth matching must not become age based ranking or selection. The treatment of identity, right to work, health information, criminal records and safeguarding findings must be defined for the launch jurisdiction before those checks are enabled.
+BR 45: CareSys Agent must distinguish employment verification, reference checking and statutory background screening in all business descriptions. An absent entry, employer nonresponse, career gap or disputed record must not be presented as a proven adverse finding. No automatic rejection based solely on such signals is included.
+BR 46: Determine the responsibilities of the platform, recruiting employer, former employer and any checking provider for collection, accuracy, disclosure, retention and complaints. Establish the necessary notices and agreements before live cross agency checking begins.
+BR 47: Health and client information collected for care delivery must remain separate from recruitment disclosures. A candidate's participation in the directory must not expose care recipients or their health information.
+15 Principal business journeys
+Independent candidate becomes discoverable
+A person registers independently, confirms account access, completes relevant profile information, records preferred regions and work patterns, chooses what recruiters may see and enables discovery. Verified recruiters can then find the approved summary. The person can later change preferences or pause discovery.
+Employer checks someone who never worked for it
+An authorized recruiter identifies a candidate through search or invitation, confirms the correct individual, requests the relevant history and explains its purpose. The candidate approves the permitted disclosure. The employer reviews source labelled career entries and may request a reference or further authorized check. Access ends when its approved period expires or is withdrawn, subject to applicable retention rules for records already lawfully held.
+Candidate joins a new agency
+The employer completes its selection process, issues an offer and final contract, and both parties agree to the same version. The person authorizes the new agency link. After required conditions are met, employment becomes active on the agreed date. The employer's employee list updates and appropriate access begins. Previous relationships and history are preserved accurately.
+Employee leaves an agency
+The agency records the end of employment, ends active access appropriately, resolves assigned assets and outstanding administration, and retains necessary records. The individual keeps their personal account and can choose whether to become discoverable. Permitted history can support future authorized checking; internal records remain protected.
+16 Business acceptance conditions
+Reference
+Business outcome required
+BA 01
+A person with no agency employer can register and maintain a personal profile
+BA 02
+A candidate can specify several geographic areas, travel radius, work type and availability
+BA 03
+A verified employer can search opted in candidates by name and relevant work preferences
+BA 04
+A permitted name and date of birth lookup supports identity matching without disclosing private history by itself
+BA 05
+A private candidate can receive an invitation without their profile becoming publicly searchable
+BA 06
+An employer can request history of someone it has never employed and see the permitted information after authorization
+BA 07
+History visibly distinguishes self declared, confirmed, disputed and corrected entries
+BA 08
+A candidate can decline a check, review disclosures and withdraw future authorization as applicable
+BA 09
+A former employer's private payroll, HR and client records remain inaccessible to the recruiting employer
+BA 10
+A candidate can contest inaccurate history and receive a documented outcome
+BA 11
+Neither search nor an employer's unilateral action can make a person its employee
+BA 12
+A new agency relationship requires both parties' agreement to the same contract and the person's joining authorization
+BA 13
+A future start date produces pending employment rather than premature active employment
+BA 14
+Joining a new agency preserves previous employer records and does not silently end another relationship
+BA 15
+A changed contract requires renewed agreement before employment activates
+BA 16
+Buying a higher plan cannot bypass authorization or reveal private career records
+BA 17
+Leaving an agency does not remove the person's independent account
+BA 18
+Duplicate or ambiguous identity matches cannot combine different people's employment histories
+
+17 Business measures
+Measure independent profile completion, profiles with current availability, time to fill vacancies, invitation response, authorized checks completed, references confirmed, contract acceptance and successful onboarding. Track disputes, confirmed identity errors, misuse reports and unauthorized disclosures alongside recruitment conversion.
+For agency operations, measure uncovered shifts, attendance exceptions, approval turnaround, overdue qualifications, outstanding assets, payroll preparation errors and subscription retention. Establish targets after a pilot baseline rather than inventing performance claims.
+18 Decisions requiring owner agreement
+The requirements above are the proposed baseline. The following decisions affect policy and commercial scope and remain open.
+1. Launch country and caregiving service categories.
+2. Whether the shared directory is limited to people with no agency employment or also includes employed people who choose to seek opportunities. Independent unemployed registration is required in either case.
+3. Whether several active agency employments are supported operationally and what availability or conflict declarations are needed.
+4. Which history fields may be shared, including treatment of performance references, reasons for leaving and disputed entries.
+5. Agency and candidate identity verification standards, permitted date of birth matching and alternatives where restricted.
+6. Required checks and conditions before contract agreement and employment activation.
+7. Recruitment pricing, employee seat definitions, candidate charges if any and subscription limits.
+8. Authorization durations, record retention, export permissions and dispute review responsibilities.
+9. Whether references from nonparticipating employers and external screening providers will be included at launch.
+10. What can be discovered about currently employed candidates and whether any employer notification is permitted. Proposed default: a current employer is not notified of job seeking or applications unless the person authorizes that contact or an applicable obligation requires it.
+19 Reference considerations
+These references inform the proposed business safeguards. They do not select the launch jurisdiction or establish compliance for CareSys Agent.
+UK ICO guidance on collecting and keeping employment records describes purpose limitation, data minimisation and the need for genuine choice when relying on consent. This supports separating career summaries from private employer files and reviewing the appropriate basis for disclosures.
+https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/employment/employment-practices-and-data-protection-keeping-employment-records/collecting-and-keeping-employment-records/
+US EEOC guidance on background checks explains that employment decisions remain subject to discrimination rules and that additional requirements may apply when using background reporting services. This supports treating history checking and statutory screening as distinct services.
+https://www.eeoc.gov/laws/guidance/background-checks-what-employers-need-know
+US EEOC guidance on prohibited employment practices states that preemployment information should be limited to what is essential for determining job qualification. This supports restricting birth date to a justified identity matching purpose rather than using age to rank applicants.
+https://www.eeoc.gov/prohibited-employment-policiespractices
+References reviewed 23 October 2026. Local requirements must be established before operating live recruitment or history disclosure services.

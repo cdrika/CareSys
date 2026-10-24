@@ -1,0 +1,152 @@
+openapi: 3.1.0
+info:
+  title: CareSys core session API
+  version: 0.1.0
+  description: Implemented core routes. Operational routes are catalogued in api.md; this contract does not claim all specification endpoints.
+servers:
+  - url: http://localhost:8080/api/v1
+security:
+  - session: []
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: caresys_session
+  parameters:
+    Agency:
+      in: path
+      name: agency
+      required: true
+      schema: {type: string, pattern: '^[a-f0-9]{32}$'}
+    Reference:
+      in: path
+      name: reference
+      required: true
+      schema: {type: string, pattern: '^[a-f0-9]{32}$'}
+    Csrf:
+      in: header
+      name: X-CSRF-TOKEN
+      required: true
+      schema: {type: string, maxLength: 128}
+    Workspace:
+      in: header
+      name: X-Workspace-Nonce
+      required: true
+      schema: {type: string, pattern: '^[a-f0-9]{48}$'}
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: {type: string}
+            message: {type: string}
+            correlation_id: {type: string}
+    HistoryDecision:
+      type: object
+      additionalProperties: false
+      required: [version, decision]
+      properties:
+        version: {type: integer, minimum: 1}
+        decision: {type: string, enum: [approve, decline, withdraw]}
+        confirm: {type: string, enum: ['yes']}
+        entries:
+          type: array
+          maxItems: 100
+          items: {type: string, pattern: '^[a-f0-9]{32}$'}
+    Activation:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: {type: integer, minimum: 1}
+  responses:
+    Success:
+      description: Authorized projected data or current workflow reference and state
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, correlation_id]
+            properties:
+              data: {}
+              correlation_id: {type: string}
+    Error:
+      description: Validation, access, scope, version, workflow or rate-limit failure
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+paths:
+  /me/profile:
+    get:
+      summary: Read own personal profile
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/Error'}
+  /agencies/{agency}/candidates:
+    get:
+      summary: Search approved candidate summaries
+      parameters:
+        - {$ref: '#/components/parameters/Agency'}
+        - in: query
+          name: purpose
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 300}
+        - in: query
+          name: name
+          schema: {type: string, maxLength: 100}
+        - in: query
+          name: region
+          schema: {type: string, maxLength: 64}
+        - in: query
+          name: page
+          schema: {type: integer, minimum: 0, maximum: 10000}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/Error'}
+  /me/history-requests/{reference}/decision:
+    post:
+      summary: Approve exact career versions, decline or withdraw future access
+      parameters:
+        - {$ref: '#/components/parameters/Reference'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/Workspace'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/HistoryDecision'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/Error'}
+  /agencies/{agency}/history-requests/{reference}/entries:
+    get:
+      summary: Read a live candidate grant as its named agency recipient
+      parameters:
+        - {$ref: '#/components/parameters/Agency'}
+        - {$ref: '#/components/parameters/Reference'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/Error'}
+  /agencies/{agency}/joining/{reference}/activate:
+    post:
+      summary: Activate a ready employment episode once
+      parameters:
+        - {$ref: '#/components/parameters/Agency'}
+        - {$ref: '#/components/parameters/Reference'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/Workspace'}
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 80}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Activation'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/Error'}
